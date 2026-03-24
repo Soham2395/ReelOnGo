@@ -33,11 +33,16 @@ export default function Sidebar({
     return acc;
   }, {});
 
+  // Unique values for filters
+  const statuses = [...new Set(allCreators.map(c => c.status).filter(Boolean))].sort();
+  const genders = [...new Set(allCreators.map(c => c.gender).filter(Boolean))].sort();
+  const availabilities = [...new Set(allCreators.map(c => c.availability).filter(Boolean))].sort();
+
   const sidebarWidth = isMobile ? 'calc(100vw - 48px)' : '380px';
 
   return (
     <aside 
-      className={`h-full flex flex-col border-r transition-all duration-300 ease-in-out z-50 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}
+      className={`h-full flex flex-col border-r transition-all duration-300 ease-in-out z-50 overflow-hidden ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}
       style={{ 
         width: isOpen ? sidebarWidth : '0px', 
         background: settings.COLORS.surface, 
@@ -107,7 +112,13 @@ export default function Sidebar({
 
         {/* Filters */}
         <div className="p-4 space-y-4 shadow-sm z-10">
-          <FilterControls filters={filters} onFiltersChange={onFiltersChange} />
+          <FilterControls 
+            filters={filters} 
+            onFiltersChange={onFiltersChange} 
+            statuses={statuses}
+            genders={genders}
+            availabilities={availabilities}
+          />
           
           <div className="flex rounded-lg p-1" style={{ background: settings.COLORS.surfaceLight }}>
             <button

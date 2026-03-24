@@ -65,7 +65,7 @@ function FilterSelect({ label, value, onChange, options, formatLabel, settings }
         }}
       >
         <option value="ALL">All</option>
-        {options.map((opt) => (
+        {options?.map((opt) => (
           <option key={opt} value={opt}>
             {formatLabel ? formatLabel(opt) : opt.replace(/_/g, ' ')}
           </option>
