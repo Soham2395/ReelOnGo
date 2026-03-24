@@ -1,0 +1,83 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
+@import "mapbox-gl/dist/mapbox-gl.css";
+
+/* ── Design Tokens ────────────────────────────────────── */
+@theme {
+  --color-bg: #0f1117;
+  --color-surface: #161921;
+  --color-surface-light: #1c2029;
+  --color-border: #262a36;
+  --color-border-light: #2f3442;
+  --color-text-primary: #e2e4ea;
+  --color-text-secondary: #9498a6;
+  --color-text-muted: #6b7080;
+  --color-accent: #4f7df9;
+  --color-accent-muted: #3a62cc;
+}
+
+/* ── Base ──────────────────────────────────────────────── */
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 0;
+  background: #0f1117;
+  color: #e2e4ea;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  overflow: hidden;
+}
+
+/* ── Mapbox Overrides ──────────────────────────────────── */
+.mapboxgl-popup-content {
+  background: transparent !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+}
+.mapboxgl-popup-tip { display: none !important; }
+.mapboxgl-popup-close-button { display: none !important; }
+
+.mapboxgl-ctrl-group {
+  background: rgba(22, 25, 33, 0.92) !important;
+  border: 1px solid #262a36 !important;
+  border-radius: 10px !important;
+  backdrop-filter: blur(10px) !important;
+}
+.mapboxgl-ctrl-group button { width: 34px !important; height: 34px !important; }
+.mapboxgl-ctrl-group button + button { border-top: 1px solid #262a36 !important; }
+.mapboxgl-ctrl-group button span { filter: invert(0.85) !important; }
+
+/* ── Scrollbar ─────────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #2f3442; border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: #4f7df9; }
+
+/* ── Marker Pulse ──────────────────────────────────────── */
+@keyframes pulse-ring {
+  0% { transform: scale(0.85); opacity: 0.6; }
+  100% { transform: scale(2); opacity: 0; }
+}
+.marker-pulse::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: inherit;
+  animation: pulse-ring 2.5s ease-out infinite;
+  z-index: -1;
+}
+
+/* ── Cluster ───────────────────────────────────────────── */
+.cluster-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+.cluster-marker:hover {
+  transform: scale(1.12);
+}
