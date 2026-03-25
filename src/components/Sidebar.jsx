@@ -262,133 +262,131 @@ export default function Sidebar({
               availabilities={availabilities}
             />
 
+            {/* Integrated Configuration Section */}
+            <div className="pt-2 border-t" style={{ borderColor: settings.COLORS.border }}>
+              <button 
+                onClick={() => setShowConfig(!showConfig)}
+                className="w-full flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-white/40 hover:text-white/60 transition-colors py-1 px-1"
+              >
+                <span>Map Settings</span>
+                <IconLayers size={14} className={`transition-transform duration-300 ${showConfig ? 'rotate-180' : ''}`} />
+              </button>
+              
+              {showConfig && (
+                <div className="mt-4 space-y-5 pb-2">
+                  {/* View Mode Selector */}
+                  <div className="space-y-2 px-1">
+                    <div className="flex justify-between items-center text-[10px] text-white/40 uppercase tracking-widest font-bold">
+                      <span>Visualization</span>
+                    </div>
+                    <div className="flex gap-2">
+                      {[
+                        { id: 'markers', label: 'Markers' },
+                        { id: 'heatmap', label: 'Heatmap' }
+                      ].map(mode => (
+                        <button
+                          key={mode.id}
+                          onClick={() => onViewModeChange(mode.id)}
+                          className={`flex-1 py-1.5 text-[10px] font-semibold rounded-md border transition-all ${viewMode === mode.id ? 'shadow-sm' : ''}`}
+                          style={{ 
+                            background: viewMode === mode.id ? `${settings.COLORS.accent}20` : settings.COLORS.surfaceLight,
+                            color: viewMode === mode.id ? settings.COLORS.accent : settings.COLORS.textMuted,
+                            borderColor: viewMode === mode.id ? `${settings.COLORS.accent}40` : settings.COLORS.border
+                          }}
+                        >
+                          {mode.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
 
+                  {/* Map Style Selector */}
+                  <div className="space-y-2 px-1">
+                    <div className="flex justify-between items-center text-[10px] text-white/40 uppercase tracking-widest font-bold">
+                      <span>Background Style</span>
+                    </div>
+                    <div className="flex gap-2">
+                      {[
+                        { id: 'mapbox://styles/mapbox/dark-v11', label: 'Dark' },
+                        { id: 'mapbox://styles/mapbox/light-v11', label: 'Light' },
+                        { id: 'mapbox://styles/mapbox/satellite-streets-v12', label: 'Sat' }
+                      ].map(style => (
+                        <button
+                          key={style.id}
+                          onClick={() => handleMapStyleChange(style.id)}
+                          className={`flex-1 py-1.5 text-[10px] font-semibold rounded-md border transition-all ${settings.MAP_CONFIG.style === style.id ? 'shadow-sm' : ''}`}
+                          style={{ 
+                            background: settings.MAP_CONFIG.style === style.id ? `${settings.COLORS.accent}20` : settings.COLORS.surfaceLight,
+                            color: settings.MAP_CONFIG.style === style.id ? settings.COLORS.accent : settings.COLORS.textMuted,
+                            borderColor: settings.MAP_CONFIG.style === style.id ? `${settings.COLORS.accent}40` : settings.COLORS.border
+                          }}
+                        >
+                          {style.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Marker Controls */}
+                  <div className="space-y-4 px-1">
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-[10px] font-bold text-white/40 uppercase">
+                        <span>Marker Size</span>
+                        <span className="text-white/60 font-mono">{settings.MARKER_CONFIG.size}px</span>
+                      </div>
+                      <input 
+                        type="range" min="8" max="24" value={settings.MARKER_CONFIG.size} 
+                        onChange={(e) => handleMarkerChange('size', parseInt(e.target.value))}
+                        className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-[#4f7df9]"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold text-white/40 uppercase">Use Status Colors</span>
+                      <button
+                        onClick={() => handleMarkerChange('useStatusColor', !settings.MARKER_CONFIG.useStatusColor)}
+                        className="w-7 h-3.5 rounded-full relative transition-colors"
+                        style={{ background: settings.MARKER_CONFIG.useStatusColor ? settings.COLORS.accent : '#262a36' }}
+                      >
+                        <div className="w-2.5 h-2.5 rounded-full bg-white absolute top-0.5 transition-all" style={{ left: settings.MARKER_CONFIG.useStatusColor ? '14px' : '2px' }} />
+                      </button>
+                    </div>
+
+                    {!settings.MARKER_CONFIG.useStatusColor && (
+                      <div className="flex items-center justify-between p-2 rounded-lg border bg-white/[0.02]" style={{ borderColor: settings.COLORS.border }}>
+                        <span className="text-[10px] font-bold text-white/40 uppercase">Custom color</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[9px] font-mono text-white/40">{settings.MARKER_CONFIG.customColor}</span>
+                          <input 
+                            type="color" 
+                            value={settings.MARKER_CONFIG.customColor} 
+                            onChange={(e) => handleMarkerChange('customColor', e.target.value)}
+                            className="w-5 h-5 rounded border-0 bg-transparent cursor-pointer p-0"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-[10px] font-bold text-white/40 uppercase">
+                        <span>Cluster Aggression</span>
+                        <span className="text-white/60 font-mono">{settings.MAP_CONFIG.clusterRadius}</span>
+                      </div>
+                      <input 
+                        type="range" min="20" max="100" value={settings.MAP_CONFIG.clusterRadius} 
+                        onChange={(e) => updateSettings('MAP_CONFIG.clusterRadius', parseInt(e.target.value))}
+                        className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-[#4f7df9]"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="flex-1 flex flex-col overflow-hidden">
             {activeTab === 'creators' ? (
               <>
-                {/* Integrated Configuration Section */}
-                <div className="px-4 py-3 border-b" style={{ borderColor: settings.COLORS.border }}>
-                 <button 
-                   onClick={() => setShowConfig(!showConfig)}
-                   className="w-full flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-white/40 hover:text-white/60 transition-colors"
-                 >
-                   <span>Map Settings</span>
-                   <IconLayers size={14} className={`transition-transform duration-300 ${showConfig ? 'rotate-180' : ''}`} />
-                 </button>
-                 
-                 {showConfig && (
-                   <div className="mt-4 space-y-5 pb-2">
-                      {/* View Mode Selector */}
-                      <div className="space-y-2">
-                        <div className="flex justify-between items-center text-[10px] text-white/40 uppercase tracking-widest font-bold">
-                          <span>Visualization</span>
-                        </div>
-                        <div className="flex gap-2">
-                          {[
-                            { id: 'markers', label: 'Markers' },
-                            { id: 'heatmap', label: 'Heatmap' }
-                          ].map(mode => (
-                            <button
-                              key={mode.id}
-                              onClick={() => onViewModeChange(mode.id)}
-                              className={`flex-1 py-1.5 text-[10px] font-semibold rounded-md border transition-all ${viewMode === mode.id ? 'shadow-sm' : ''}`}
-                              style={{ 
-                                background: viewMode === mode.id ? `${settings.COLORS.accent}20` : settings.COLORS.surfaceLight,
-                                color: viewMode === mode.id ? settings.COLORS.accent : settings.COLORS.textMuted,
-                                borderColor: viewMode === mode.id ? `${settings.COLORS.accent}40` : settings.COLORS.border
-                              }}
-                            >
-                              {mode.label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Map Style Selector */}
-                      <div className="space-y-2">
-                        <div className="flex justify-between items-center text-[10px] text-white/40 uppercase tracking-widest font-bold">
-                          <span>Background Style</span>
-                        </div>
-                        <div className="flex gap-2">
-                          {[
-                            { id: 'mapbox://styles/mapbox/dark-v11', label: 'Dark' },
-                            { id: 'mapbox://styles/mapbox/light-v11', label: 'Light' },
-                            { id: 'mapbox://styles/mapbox/satellite-streets-v12', label: 'Sat' }
-                          ].map(style => (
-                            <button
-                              key={style.id}
-                              onClick={() => handleMapStyleChange(style.id)}
-                              className={`flex-1 py-1.5 text-[10px] font-semibold rounded-md border transition-all ${settings.MAP_CONFIG.style === style.id ? 'shadow-sm' : ''}`}
-                              style={{ 
-                                background: settings.MAP_CONFIG.style === style.id ? `${settings.COLORS.accent}20` : settings.COLORS.surfaceLight,
-                                color: settings.MAP_CONFIG.style === style.id ? settings.COLORS.accent : settings.COLORS.textMuted,
-                                borderColor: settings.MAP_CONFIG.style === style.id ? `${settings.COLORS.accent}40` : settings.COLORS.border
-                              }}
-                            >
-                              {style.label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Marker Controls */}
-                      <div className="space-y-4">
-                        <div className="space-y-2">
-                          <div className="flex justify-between text-[10px] font-bold text-white/40 uppercase">
-                            <span>Marker Size</span>
-                            <span className="text-white/60 font-mono">{settings.MARKER_CONFIG.size}px</span>
-                          </div>
-                          <input 
-                            type="range" min="8" max="24" value={settings.MARKER_CONFIG.size} 
-                            onChange={(e) => handleMarkerChange('size', parseInt(e.target.value))}
-                            className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-[#4f7df9]"
-                          />
-                        </div>
-
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-bold text-white/40 uppercase">Use Status Colors</span>
-                          <button
-                            onClick={() => handleMarkerChange('useStatusColor', !settings.MARKER_CONFIG.useStatusColor)}
-                            className="w-7 h-3.5 rounded-full relative transition-colors"
-                            style={{ background: settings.MARKER_CONFIG.useStatusColor ? settings.COLORS.accent : '#262a36' }}
-                          >
-                            <div className="w-2.5 h-2.5 rounded-full bg-white absolute top-0.5 transition-all" style={{ left: settings.MARKER_CONFIG.useStatusColor ? '14px' : '2px' }} />
-                          </button>
-                        </div>
-
-                        {!settings.MARKER_CONFIG.useStatusColor && (
-                          <div className="flex items-center justify-between p-2 rounded-lg border bg-white/[0.02]" style={{ borderColor: settings.COLORS.border }}>
-                            <span className="text-[10px] font-bold text-white/40 uppercase">Custom color</span>
-                            <div className="flex items-center gap-2">
-                              <span className="text-[9px] font-mono text-white/40">{settings.MARKER_CONFIG.customColor}</span>
-                              <input 
-                                type="color" 
-                                value={settings.MARKER_CONFIG.customColor} 
-                                onChange={(e) => handleMarkerChange('customColor', e.target.value)}
-                                className="w-5 h-5 rounded border-0 bg-transparent cursor-pointer p-0"
-                              />
-                            </div>
-                          </div>
-                        )}
-
-                        <div className="space-y-2">
-                          <div className="flex justify-between text-[10px] font-bold text-white/40 uppercase">
-                            <span>Cluster Aggression</span>
-                            <span className="text-white/60 font-mono">{settings.MAP_CONFIG.clusterRadius}</span>
-                          </div>
-                          <input 
-                            type="range" min="20" max="100" value={settings.MAP_CONFIG.clusterRadius} 
-                            onChange={(e) => updateSettings('MAP_CONFIG.clusterRadius', parseInt(e.target.value))}
-                            className="w-full h-1 bg-white/10 rounded-lg appearance-none cursor-pointer accent-[#4f7df9]"
-                          />
-                        </div>
-                      </div>
-                   </div>
-                 )}
-              </div>
-
               {/* Creator List */}
               <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-3 custom-scrollbar">
                 <div className="flex items-center justify-between mb-4 mt-6">
