@@ -9,7 +9,7 @@ import { SettingsProvider, useSettings } from './SettingsContext.jsx';
 function AppContent() {
   const { settings } = useSettings();
   const [creators, setCreators] = useState([]);
-  const [event, setEvent] = useState(null);
+  const [events, setEvents] = useState([]);
   const [eventRadius, setEventRadius] = useState(EVENT_CONFIG.radius);
   const [filterByProximity, setFilterByProximity] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -44,7 +44,15 @@ function AppContent() {
     ])
       .then(([creatorsData, eventData]) => {
         if (creatorsData.success) setCreators(creatorsData.data);
-        if (eventData.success) setEvent(eventData.data);
+        
+        if (eventData.success) {
+          const fetchedEvents = Array.isArray(eventData.data) ? eventData.data : [eventData.data];
+          setEvents(fetchedEvents);
+          // Set initial selected event for proximity filtering
+          if (fetchedEvents.length > 0) {
+            setSelectedEvent(fetchedEvents[0]);
+          }
+        }
         
         if (!creatorsData.success && !eventData.success) {
           setError('Failed to fetch data');
@@ -67,10 +75,10 @@ function AppContent() {
     const matchesGender = filters.gender === 'ALL' || c.gender === filters.gender;
     const matchesAvailability = filters.availability === 'ALL' || c.availability === filters.availability;
     
-    // 2. Proximity Filter
+    // 2. Proximity Filter (Linked to Selected Event)
     let matchesProximity = true;
-    if (filterByProximity && event?.venueLocation?.coordinates) {
-      const [eventLon, eventLat] = event.venueLocation.coordinates;
+    if (filterByProximity && selectedEvent?.venueLocation?.coordinates) {
+      const [eventLon, eventLat] = selectedEvent.venueLocation.coordinates;
       const creatorCoords = (c.locationCoordinates || c.location)?.coordinates;
       
       if (creatorCoords) {
@@ -78,7 +86,7 @@ function AppContent() {
         const dist = calculateDistance(eventLat, eventLon, creLat, creLon);
         matchesProximity = dist <= eventRadius;
       } else {
-        matchesProximity = false; // Hide creators without coordinates if proximity is on
+        matchesProximity = false; 
       }
     }
 
@@ -158,13 +166,14 @@ function AppContent() {
         <Sidebar
           creators={filteredCreators}
           allCreators={creators}
-          event={event}
+          events={events}
           eventRadius={eventRadius}
           onEventRadiusChange={setEventRadius}
           filterByProximity={filterByProximity}
           onFilterByProximityChange={setFilterByProximity}
           onEventClick={handleEventClick}
           selectedCreator={selectedCreator}
+          selectedEvent={selectedEvent}
           onCreatorClick={handleCreatorClick}
           filters={filters}
           onFiltersChange={setFilters}
@@ -179,7 +188,7 @@ function AppContent() {
       <div className="flex-1 relative">
         <MapView
           creators={filteredCreators}
-          event={event}
+          events={events}
           eventRadius={eventRadius}
           filterByProximity={filterByProximity}
           onEventClick={handleEventClick}

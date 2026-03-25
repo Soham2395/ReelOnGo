@@ -17,7 +17,8 @@ import { STATUS_CONFIG, EVENT_CONFIG } from '../config';
 export default function Sidebar({ 
   creators, 
   allCreators, 
-  event,
+  events,
+  selectedEvent,
   eventRadius,
   onEventRadiusChange,
   filterByProximity,
@@ -365,32 +366,35 @@ export default function Sidebar({
             <div className="flex-1 flex flex-col overflow-hidden">
               <div className="flex-1 overflow-y-auto px-4 py-6 custom-scrollbar space-y-6">
                 <div className="space-y-3">
-                  <h2 className="text-[11px] font-semibold uppercase tracking-wider text-white/30 px-1">Active Events</h2>
-                  {event ? (
-                    <EventCard 
-                      event={event} 
-                      isSelected={activeTab === 'events'} 
-                      onClick={() => onEventClick(event)} 
-                    />
+                  <h2 className="text-[11px] font-semibold uppercase tracking-wider text-white/30 px-1">Active Events ({events.length})</h2>
+                  {events.length > 0 ? (
+                    events.map((evt) => (
+                      <EventCard 
+                        key={evt._id}
+                        event={evt} 
+                        isSelected={selectedEvent?._id === evt._id} 
+                        onClick={() => onEventClick(evt)} 
+                      />
+                    ))
                   ) : (
                     <div className="py-12 text-center" style={{ background: `${settings.COLORS.surfaceLight}40`, borderRadius: '12px' }}>
-                      <p className="text-sm text-white/40">No event data available</p>
+                      <p className="text-sm text-white/40">No events found</p>
                     </div>
                   )}
                 </div>
 
-                {event && (
+                {selectedEvent && (
                   <div className="space-y-4">
                     <h4 className="text-[11px] font-bold uppercase tracking-widest text-white/30 px-1">Proximity Controls</h4>
                     <div className="p-5 rounded-2xl border space-y-6" style={{ background: settings.COLORS.surfaceLight, borderColor: settings.COLORS.border }}>
                       <div className="flex items-center justify-between">
-                        <div className="space-y-0.5">
-                          <p className="text-xs font-bold text-white">Radius Filter</p>
+                        <div className="space-y-0.5 min-w-0 flex-1 pr-4">
+                          <p className="text-xs font-bold text-white truncate">{selectedEvent.subeventName}</p>
                           <p className="text-[10px]" style={{ color: settings.COLORS.textMuted }}>Limit creators to this radius</p>
                         </div>
                         <button
                           onClick={() => onFilterByProximityChange(!filterByProximity)}
-                          className="w-10 h-5 rounded-full relative transition-colors"
+                          className="w-10 h-5 rounded-full relative transition-colors shrink-0"
                           style={{ background: filterByProximity ? EVENT_CONFIG.color : '#262a36' }}
                         >
                           <div className="w-3.5 h-3.5 rounded-full bg-white absolute top-0.75 transition-all" style={{ left: filterByProximity ? '22px' : '3px' }} />
@@ -408,11 +412,6 @@ export default function Sidebar({
                           onChange={(e) => onEventRadiusChange(parseInt(e.target.value))}
                           className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-[#ff4d4d]"
                         />
-                        <div className="flex justify-between text-[9px] font-bold text-white/20 uppercase tracking-tighter">
-                          <span>1km</span>
-                          <span>25km</span>
-                          <span>50km</span>
-                        </div>
                       </div>
                     </div>
                   </div>

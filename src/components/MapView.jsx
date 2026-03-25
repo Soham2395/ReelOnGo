@@ -26,7 +26,7 @@ import {
 
 export default function MapView({ 
   creators, 
-  event,
+  events,
   eventRadius,
   filterByProximity,
   onEventClick,
@@ -55,11 +55,11 @@ export default function MapView({
     };
   }, [creators]);
 
-  // Event Radius Circle GeoJSON
+  // Event Radius Circle GeoJSON (Linked to Selected Event)
   const eventCircleGeoJSON = useMemo(() => {
-    if (!event?.venueLocation?.coordinates) return null;
+    if (!selectedEvent?.venueLocation?.coordinates) return null;
     
-    const [lon, lat] = event.venueLocation.coordinates;
+    const [lon, lat] = selectedEvent.venueLocation.coordinates;
     const points = 64;
     const coords = [];
     
@@ -83,7 +83,7 @@ export default function MapView({
         coordinates: [coords]
       }
     };
-  }, [event, eventRadius]);
+  }, [selectedEvent, eventRadius]);
 
   // Handle flyTo changes
   useEffect(() => {
@@ -240,37 +240,49 @@ export default function MapView({
           );
         })}
 
-        {/* Event Marker */}
-        {event?.venueLocation?.coordinates && (
-          <Marker
-            longitude={event.venueLocation.coordinates[0]}
-            latitude={event.venueLocation.coordinates[1]}
-            anchor="bottom"
-            onClick={(e) => {
-              e.originalEvent.stopPropagation();
-              onEventClick(event);
-            }}
-            style={{ cursor: 'pointer' }}
-          >
-            <div className="flex flex-col items-center">
-              <div 
-                className="px-2 py-1 mb-1 rounded bg-black/80 border whitespace-nowrap overflow-hidden max-w-[120px]"
-                style={{ borderColor: EVENT_CONFIG.color }}
-              >
-                <p className="text-[9px] font-bold text-white truncate">{event.subeventName}</p>
-              </div>
-              <div className="relative">
-                <div className="absolute inset-0 bg-red-500 rounded-full animate-ping opacity-30" />
-                <div 
-                  className="w-8 h-8 rounded-full flex items-center justify-center shadow-2xl relative z-10"
-                  style={{ background: EVENT_CONFIG.color, border: '2px solid white' }}
-                >
-                   <IconMapPin size={18} color="white" />
+        {/* Event Markers Layer */}
+        {events.length > 0 && events.map((evt) => {
+          const coords = evt.venueLocation?.coordinates;
+          if (!coords) return null;
+          const isSelected = selectedEvent?._id === evt._id;
+
+          return (
+            <Marker
+              key={evt._id}
+              longitude={coords[0]}
+              latitude={coords[1]}
+              anchor="bottom"
+              onClick={(e) => {
+                e.originalEvent.stopPropagation();
+                onEventClick(evt);
+              }}
+              style={{ cursor: 'pointer', zIndex: isSelected ? 10 : 5 }}
+            >
+              <div className="flex flex-col items-center group">
+                {isSelected && (
+                  <div 
+                    className="px-2 py-1 mb-1 rounded bg-black/80 border border-white/20 whitespace-nowrap overflow-hidden max-w-[120px] shadow-xl animate-in fade-in duration-300"
+                    style={{ borderColor: EVENT_CONFIG.color }}
+                  >
+                    <p className="text-[9px] font-bold text-white truncate">{evt.subeventName}</p>
+                  </div>
+                )}
+                <div className="relative">
+                  {isSelected && <div className="absolute inset-0 bg-red-500 rounded-full animate-ping opacity-30" />}
+                  <div 
+                    className="w-8 h-8 rounded-full flex items-center justify-center shadow-2xl relative z-10 transition-transform group-hover:scale-110"
+                    style={{ 
+                      background: isSelected ? EVENT_CONFIG.color : '#262a36', 
+                      border: `2px solid ${isSelected ? 'white' : 'rgba(255,255,255,0.1)'}` 
+                    }}
+                  >
+                     <IconMapPin size={isSelected ? 18 : 14} color="white" />
+                  </div>
                 </div>
               </div>
-            </div>
-          </Marker>
-        )}
+            </Marker>
+          );
+        })}
 
         {/* Popup for Selected Creator */}
         {selectedCreator && (
