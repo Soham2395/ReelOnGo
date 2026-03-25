@@ -1,13 +1,37 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import Map, { Marker, Popup, Source, Layer, NavigationControl, GeolocateControl } from 'react-map-gl/mapbox';
-import CreatorPopup from './CreatorPopup';
+import { useMemo, useRef, useEffect, useState } from 'react';
+import Map, { 
+  Marker, 
+  Popup, 
+  NavigationControl, 
+  ScaleControl,
+  Source,
+  Layer
+} from 'react-map-gl/mapbox';
+import 'mapbox-gl/dist/mapbox-gl.css';
+import { 
+  MAP_CONFIG, 
+  MARKER_CONFIG, 
+  HEATMAP_CONFIG, 
+  EVENT_CONFIG,
+  getInitials 
+} from '../config';
 import { useSettings } from '../SettingsContext.jsx';
-
-const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
+import { 
+  IconMapPin,
+  IconUser,
+  IconCalendar,
+  IconClock,
+  IconMail
+} from './Icons';
 
 export default function MapView({ 
   creators, 
+  event,
+  eventRadius,
+  filterByProximity,
+  onEventClick,
   selectedCreator, 
+  selectedEvent,
   onCreatorClick, 
   onMapClick, 
   flyTo, 
@@ -15,41 +39,65 @@ export default function MapView({
   sidebarOpen,
   isMobile 
 }) {
+  const mapRef = useRef();
   const { settings, getStatusConfig } = useSettings();
-  const mapRef = useRef(null);
-  const [viewState, setViewState] = useState({
-    longitude: settings.MAP_CONFIG.center.longitude,
-    latitude: settings.MAP_CONFIG.center.latitude,
-    zoom: settings.MAP_CONFIG.zoom,
-    pitch: settings.MAP_CONFIG.pitch,
-    bearing: settings.MAP_CONFIG.bearing,
-  });
-  const [popupCreator, setPopupCreator] = useState(null);
+  const [hoveredCreator, setHoveredCreator] = useState(null);
 
-  // Heatmap layer style derived from settings
-  const heatmapLayer = useMemo(() => ({
-    id: 'heatmap-layer',
-    type: 'heatmap',
-    paint: {
-      'heatmap-weight': settings.HEATMAP_CONFIG.weight,
-      'heatmap-intensity': [
-        'interpolate', ['linear'], ['zoom'],
-        settings.HEATMAP_CONFIG.intensityStops.minZoom, settings.HEATMAP_CONFIG.intensityStops.min,
-        settings.HEATMAP_CONFIG.intensityStops.maxZoom, settings.HEATMAP_CONFIG.intensityStops.max,
-      ],
-      'heatmap-color': [
-        'interpolate', ['linear'], ['heatmap-density'],
-        ...settings.HEATMAP_CONFIG.colorStops.flat(),
-      ],
-      'heatmap-radius': [
-        'interpolate', ['linear'], ['zoom'],
-        settings.HEATMAP_CONFIG.radiusStops.minZoom, settings.HEATMAP_CONFIG.radiusStops.min,
-        settings.HEATMAP_CONFIG.radiusStops.maxZoom, settings.HEATMAP_CONFIG.radiusStops.max,
-      ],
-      'heatmap-opacity': settings.HEATMAP_CONFIG.opacity,
-    },
-  }), [settings.HEATMAP_CONFIG]);
+  // Grouping creators into status-based clusters or heatmaps
+  const heatmapData = useMemo(() => {
+    return {
+      type: 'FeatureCollection',
+      features: creators.map(c => ({
+        type: 'Feature',
+        geometry: (c.locationCoordinates || c.location),
+        properties: { weight: 1 }
+      }))
+    };
+  }, [creators]);
 
+  // Event Radius Circle GeoJSON
+  const eventCircleGeoJSON = useMemo(() => {
+    if (!event?.venueLocation?.coordinates) return null;
+    
+    const [lon, lat] = event.venueLocation.coordinates;
+    const points = 64;
+    const coords = [];
+    
+    // km to degrees (rough approximation)
+    const km = eventRadius;
+    const distanceX = km / (111.32 * Math.cos(lat * Math.PI / 180));
+    const distanceY = km / 110.574;
+
+    for (let i = 0; i < points; i++) {
+      const theta = (i / points) * (2 * Math.PI);
+      const x = distanceX * Math.cos(theta);
+      const y = distanceY * Math.sin(theta);
+      coords.push([lon + x, lat + y]);
+    }
+    coords.push(coords[0]);
+
+    return {
+      type: 'Feature',
+      geometry: {
+        type: 'Polygon',
+        coordinates: [coords]
+      }
+    };
+  }, [event, eventRadius]);
+
+  // Handle flyTo changes
+  useEffect(() => {
+    if (flyTo && mapRef.current) {
+      mapRef.current.flyTo({
+        center: [flyTo.longitude, flyTo.latitude],
+        zoom: flyTo.zoom || 14,
+        duration: MAP_CONFIG.flyToDuration,
+        essential: true
+      });
+    }
+  }, [flyTo]);
+
+  // Handle sidebar resize
   useEffect(() => {
     const timer = setTimeout(() => {
       if (mapRef.current) {
@@ -59,214 +107,276 @@ export default function MapView({
     return () => clearTimeout(timer);
   }, [sidebarOpen]);
 
-  useEffect(() => {
-    const handleResize = () => {
-      if (mapRef.current) {
-        mapRef.current.getMap().resize();
-      }
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  useEffect(() => {
-    if (flyTo && mapRef.current) {
-      mapRef.current.flyTo({
-        center: [flyTo.longitude, flyTo.latitude],
-        zoom: flyTo.zoom || 14,
-        duration: settings.MAP_CONFIG.flyToDuration,
-        essential: true,
-      });
-    }
-  }, [flyTo, settings.MAP_CONFIG.flyToDuration]);
-
-  useEffect(() => {
-    setPopupCreator(selectedCreator);
-  }, [selectedCreator]);
-
-  const geojson = useMemo(() => ({
-    type: 'FeatureCollection',
-    features: creators
-      .filter((c) => (c.locationCoordinates || c.location)?.coordinates)
-      .map((c) => ({
-        type: 'Feature',
-        geometry: c.locationCoordinates || c.location,
-        properties: { id: c._id },
-      })),
-  }), [creators]);
-
-  const getClusteredMarkers = useCallback(() => {
-    const zoom = viewState.zoom;
-    if (zoom >= settings.MAP_CONFIG.clusterThreshold) {
-      return {
-        singles: creators.filter((c) => (c.locationCoordinates || c.location)?.coordinates),
-        clusters: [],
-      };
-    }
-
-    const clusters = [];
-    const used = new Set();
-    const threshold = ((settings.MAP_CONFIG.clusterRadius || 50) / 512) * (360 / Math.pow(2, zoom));
-    
-    const valid = creators.filter((c) => (c.locationCoordinates || c.location)?.coordinates);
-
-    for (let i = 0; i < valid.length; i++) {
-      if (used.has(i)) continue;
-      const creatorI = valid[i];
-      const coordsI = (creatorI.locationCoordinates || creatorI.location).coordinates;
-      
-      const group = [creatorI];
-      used.add(i);
-
-      for (let j = i + 1; j < valid.length; j++) {
-        if (used.has(j)) continue;
-        const creatorJ = valid[j];
-        const coordsJ = (creatorJ.locationCoordinates || creatorJ.location).coordinates;
-        
-        const dx = coordsI[0] - coordsJ[0];
-        const dy = coordsI[1] - coordsJ[1];
-        if (Math.sqrt(dx * dx + dy * dy) < threshold) {
-          group.push(creatorJ);
-          used.add(j);
-        }
-      }
-
-      if (group.length > 1) {
-        const avgLng = group.reduce((s, c) => s + (c.locationCoordinates || c.location).coordinates[0], 0) / group.length;
-        const avgLat = group.reduce((s, c) => s + (c.locationCoordinates || c.location).coordinates[1], 0) / group.length;
-        clusters.push({ items: group, longitude: avgLng, latitude: avgLat, count: group.length });
-      } else {
-        const coords = (group[0].locationCoordinates || group[0].location).coordinates;
-        clusters.push({
-          items: group,
-          longitude: coords[0],
-          latitude: coords[1],
-          count: 1,
-        });
-      }
-    }
-
-    return {
-      singles: clusters.filter((c) => c.count === 1).map((c) => c.items[0]),
-      clusters: clusters.filter((c) => c.count > 1),
-    };
-  }, [creators, viewState.zoom, settings.MAP_CONFIG]);
-
-  const { singles, clusters } = getClusteredMarkers();
-
-  const handleClusterClick = (cluster) => {
-    if (mapRef.current) {
-      mapRef.current.flyTo({
-        center: [cluster.longitude, cluster.latitude],
-        zoom: viewState.zoom + settings.MAP_CONFIG.clusterExpandZoom,
-        duration: 1200,
-      });
-    }
-  };
+  // Map Controls Position
+  const controlsPosition = isMobile ? 'top-right' : 'bottom-right';
 
   return (
-    <Map
-      ref={mapRef}
-      {...viewState}
-      onMove={(evt) => setViewState(evt.viewState)}
-      onClick={onMapClick}
-      mapboxAccessToken={MAPBOX_TOKEN}
-      mapStyle={settings.MAP_CONFIG.style}
-      style={{ width: '100%', height: '100%' }}
-      attributionControl={false}
-      maxZoom={settings.MAP_CONFIG.maxZoom}
-      minZoom={settings.MAP_CONFIG.minZoom}
-    >
-      <NavigationControl position={isMobile ? "top-right" : "bottom-right"} showCompass={false} />
-      <GeolocateControl position={isMobile ? "top-right" : "bottom-right"} />
+    <div className="w-full h-full relative">
+      <Map
+        ref={mapRef}
+        initialViewState={{
+          longitude: MAP_CONFIG.center.longitude,
+          latitude: MAP_CONFIG.center.latitude,
+          zoom: MAP_CONFIG.center.zoom
+        }}
+        mapboxAccessToken={import.meta.env.VITE_MAPBOX_TOKEN}
+        mapStyle={settings.MAP_CONFIG.style}
+        onClick={onMapClick}
+        style={{ width: '100%', height: '100%' }}
+        attributionControl={false}
+      >
+        <NavigationControl position={controlsPosition} showCompass={false} />
 
-      {viewMode === 'heatmap' && (
-        <Source id="heatmap-data" type="geojson" data={geojson}>
-          <Layer {...heatmapLayer} />
-        </Source>
-      )}
+        {/* Proximity Circle Layer */}
+        {eventCircleGeoJSON && filterByProximity && (
+          <Source id="event-radius" type="geojson" data={eventCircleGeoJSON}>
+            <Layer 
+              id="event-radius-fill"
+              type="fill"
+              paint={{
+                'fill-color': EVENT_CONFIG.color,
+                'fill-opacity': EVENT_CONFIG.circleOpacity
+              }}
+            />
+            <Layer 
+              id="event-radius-stroke"
+              type="line"
+              paint={{
+                'line-color': EVENT_CONFIG.color,
+                'line-width': 2,
+                'line-opacity': EVENT_CONFIG.circleBorderOpacity,
+                'line-dasharray': [2, 2]
+              }}
+            />
+          </Source>
+        )}
 
-      {viewMode === 'markers' && (
-        <>
-          {clusters.map((cluster, i) => {
-            const sz = Math.max(
-              settings.MARKER_CONFIG.clusterMinSize,
-              Math.min(settings.MARKER_CONFIG.clusterMaxSize, settings.MARKER_CONFIG.clusterMinSize + cluster.count * settings.MARKER_CONFIG.clusterSizePerItem)
-            );
-            return (
-              <Marker key={`c-${i}`} longitude={cluster.longitude} latitude={cluster.latitude} anchor="center">
-                <div
-                  className="cluster-marker"
-                  style={{
-                    width: sz,
-                    height: sz,
-                    background: settings.MARKER_CONFIG.clusterBg,
-                    border: `2px solid ${settings.MARKER_CONFIG.clusterBorder}`,
-                    color: settings.MARKER_CONFIG.clusterTextColor,
-                    fontSize: settings.MARKER_CONFIG.clusterFontSize,
-                    fontWeight: settings.MARKER_CONFIG.clusterFontWeight,
-                    boxShadow: `0 2px 12px ${settings.MARKER_CONFIG.clusterBorder}`,
-                  }}
-                  onClick={(e) => { e.stopPropagation(); handleClusterClick(cluster); }}
-                >
-                  {cluster.count}
-                </div>
-              </Marker>
-            );
-          })}
+        {/* Heatmap Layer */}
+        {viewMode === 'heatmap' && (
+          <Source id="creators-heatmap" type="geojson" data={heatmapData}>
+            <Layer
+              id="heatmap-layer"
+              type="heatmap"
+              paint={{
+                'heatmap-weight': HEATMAP_CONFIG.weight,
+                'heatmap-intensity': [
+                  'interpolate',
+                  ['linear'],
+                  ['zoom'],
+                  HEATMAP_CONFIG.intensityStops.minZoom,
+                  HEATMAP_CONFIG.intensityStops.min,
+                  HEATMAP_CONFIG.intensityStops.maxZoom,
+                  HEATMAP_CONFIG.intensityStops.max
+                ],
+                'heatmap-color': [
+                  'interpolate',
+                  ['linear'],
+                  ['heatmap-density'],
+                  ...HEATMAP_CONFIG.colorStops.flat()
+                ],
+                'heatmap-radius': [
+                  'interpolate',
+                  ['linear'],
+                  ['zoom'],
+                  HEATMAP_CONFIG.radiusStops.minZoom,
+                  HEATMAP_CONFIG.radiusStops.min,
+                  HEATMAP_CONFIG.radiusStops.maxZoom,
+                  HEATMAP_CONFIG.radiusStops.max
+                ],
+                'heatmap-opacity': HEATMAP_CONFIG.opacity
+              }}
+            />
+          </Source>
+        )}
 
-          {singles.map((creator) => {
-            const status = getStatusConfig(creator.status);
-            const isSelected = selectedCreator?._id === creator._id;
-            const shouldPulse = settings.MARKER_CONFIG.pulseEnabled && settings.MARKER_CONFIG.pulseStatuses.includes(creator.status);
-            const coords = (creator.locationCoordinates || creator.location).coordinates;
-            const markerColor = settings.MARKER_CONFIG.useStatusColor ? status.color : settings.MARKER_CONFIG.customColor;
-
-            return (
-              <Marker
-                key={creator._id}
-                longitude={coords[0]}
-                latitude={coords[1]}
-                anchor="center"
+        {/* Markers Layer */}
+        {viewMode === 'markers' && creators.map((creator) => {
+          const coords = (creator.locationCoordinates || creator.location)?.coordinates;
+          if (!coords) return null;
+          
+          const isSelected = selectedCreator?._id === creator._id;
+          const isHovered = hoveredCreator?._id === creator._id;
+          const statusConfig = getStatusConfig(creator.status);
+          const iconColor = settings.MARKER_CONFIG.useStatusColor ? statusConfig.color : settings.MARKER_CONFIG.customColor;
+          
+          return (
+            <Marker
+              key={creator._id}
+              longitude={coords[0]}
+              latitude={coords[1]}
+              onClick={(e) => {
+                e.originalEvent.stopPropagation();
+                onCreatorClick(creator);
+              }}
+              style={{ cursor: 'pointer', zIndex: isSelected ? 10 : 1 }}
+            >
+              <div 
+                className="relative flex items-center justify-center transition-all duration-300"
+                onMouseEnter={() => setHoveredCreator(creator)}
+                onMouseLeave={() => setHoveredCreator(null)}
+                style={{ 
+                  transform: `scale(${isSelected ? settings.MARKER_CONFIG.selectedScale : (isHovered ? settings.MARKER_CONFIG.hoverScale : 1)})`
+                }}
               >
-                <div
-                  className={`relative cursor-pointer transition-transform duration-200 ${shouldPulse ? 'marker-pulse' : ''}`}
-                  style={{
-                    width: settings.MARKER_CONFIG.size,
+                {/* Visual Glow */}
+                {(isSelected || isHovered) && (
+                  <div className="absolute inset-0 rounded-full blur-md opacity-50" style={{ background: iconColor }} />
+                )}
+                
+                {/* Marker Body */}
+                <div 
+                  className="w-full h-full rounded-full border-2 shadow-lg flex items-center justify-center bg-white transition-colors"
+                  style={{ 
+                    width: settings.MARKER_CONFIG.size, 
                     height: settings.MARKER_CONFIG.size,
-                    transform: `scale(${isSelected ? settings.MARKER_CONFIG.selectedScale : 1})`,
-                    zIndex: isSelected ? 100 : 1,
+                    borderColor: isSelected ? settings.MARKER_CONFIG.selectedBorderColor : iconColor,
+                    background: isSelected ? iconColor : '#fff'
                   }}
-                  onClick={(e) => { e.stopPropagation(); onCreatorClick(creator); }}
                 >
-                  {/* Dot */}
-                  <div
-                    className="absolute inset-0 rounded-full border-2 transition-all duration-300 hover:scale-125"
-                    style={{
-                      backgroundColor: markerColor,
-                      borderColor: settings.MARKER_CONFIG.selectedBorderColor,
-                      boxShadow: `0 0 ${settings.MARKER_CONFIG.glowRadius}px ${markerColor}60`,
-                    }}
-                  />
+                  <IconUser size={settings.MARKER_CONFIG.size * 0.7} color={isSelected ? '#fff' : iconColor} />
                 </div>
-              </Marker>
-            );
-          })}
-        </>
-      )}
+              </div>
+            </Marker>
+          );
+        })}
 
-      {popupCreator && (popupCreator.locationCoordinates || popupCreator.location)?.coordinates && (
-        <Popup
-          longitude={(popupCreator.locationCoordinates || popupCreator.location).coordinates[0]}
-          latitude={(popupCreator.locationCoordinates || popupCreator.location).coordinates[1]}
-          anchor="bottom"
-          offset={isMobile ? 10 : 20}
-          closeOnClick={false}
-          onClose={() => setPopupCreator(null)}
-        >
-          <CreatorPopup creator={popupCreator} onClose={() => setPopupCreator(null)} />
-        </Popup>
-      )}
-    </Map>
+        {/* Event Marker */}
+        {event?.venueLocation?.coordinates && (
+          <Marker
+            longitude={event.venueLocation.coordinates[0]}
+            latitude={event.venueLocation.coordinates[1]}
+            anchor="bottom"
+            onClick={(e) => {
+              e.originalEvent.stopPropagation();
+              onEventClick(event);
+            }}
+            style={{ cursor: 'pointer' }}
+          >
+            <div className="flex flex-col items-center">
+              <div 
+                className="px-2 py-1 mb-1 rounded bg-black/80 border whitespace-nowrap overflow-hidden max-w-[120px]"
+                style={{ borderColor: EVENT_CONFIG.color }}
+              >
+                <p className="text-[9px] font-bold text-white truncate">{event.subeventName}</p>
+              </div>
+              <div className="relative">
+                <div className="absolute inset-0 bg-red-500 rounded-full animate-ping opacity-30" />
+                <div 
+                  className="w-8 h-8 rounded-full flex items-center justify-center shadow-2xl relative z-10"
+                  style={{ background: EVENT_CONFIG.color, border: '2px solid white' }}
+                >
+                   <IconMapPin size={18} color="white" />
+                </div>
+              </div>
+            </div>
+          </Marker>
+        )}
+
+        {/* Popup for Selected Creator */}
+        {selectedCreator && (
+          <Popup
+            longitude={(selectedCreator.locationCoordinates || selectedCreator.location).coordinates[0]}
+            latitude={(selectedCreator.locationCoordinates || selectedCreator.location).coordinates[1]}
+            anchor="bottom"
+            offset={30}
+            onClose={() => onMapClick()}
+            closeButton={false}
+            className="creator-popup"
+            maxWidth="320px"
+          >
+            <div className="p-3 bg-[#161921] border border-white/10 rounded-xl overflow-hidden shadow-2xl">
+              <div className="absolute top-0 right-0 w-24 h-24 blur-3xl opacity-20 rounded-full" style={{ background: getStatusConfig(selectedCreator.status).color }} />
+              
+              <div className="relative z-10 space-y-3">
+                <div className="flex items-start justify-between">
+                  <div 
+                    className="w-8 h-8 rounded-lg flex items-center justify-center shadow-lg text-[10px] font-bold text-white transition-transform hover:scale-105" 
+                    style={{ background: getStatusConfig(selectedCreator.status).color }}
+                  >
+                    {getInitials(selectedCreator.creatorName)}
+                  </div>
+                  <div 
+                    className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border" 
+                    style={{ 
+                      color: getStatusConfig(selectedCreator.status).color, 
+                      borderColor: `${getStatusConfig(selectedCreator.status).color}30`, 
+                      background: `${getStatusConfig(selectedCreator.status).color}10` 
+                    }}
+                  >
+                    {getStatusConfig(selectedCreator.status).label}
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="text-sm font-bold text-white leading-tight">{selectedCreator.creatorName}</h3>
+                  <p className="text-[10px] font-medium mt-1 text-white/50 truncate">
+                    {selectedCreator.locationName || 'Location N/A'}
+                  </p>
+                </div>
+
+                <div className="pt-2 border-t border-white/5 flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <IconMail size={12} color={getStatusConfig(selectedCreator.status).color} className="shrink-0" />
+                    <p className="text-[9px] font-medium text-white/60 truncate">{selectedCreator.email || 'No email'}</p>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="text-[9px] font-mono text-white/30 uppercase tracking-tighter">{selectedCreator.creatorCode}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Popup>
+        )}
+
+        {/* Event Popup */}
+        {selectedEvent && selectedEvent.venueLocation?.coordinates && (
+          <Popup
+            longitude={selectedEvent.venueLocation.coordinates[0]}
+            latitude={selectedEvent.venueLocation.coordinates[1]}
+            anchor="bottom"
+            onClose={() => onMapClick()}
+            closeButton={false}
+            maxWidth="320px"
+            className="event-popup"
+            offset={30}
+          >
+            <div className="p-3 bg-[#161921] border border-white/10 rounded-xl overflow-hidden shadow-2xl">
+              <div className="absolute top-0 right-0 w-24 h-24 blur-3xl opacity-20 rounded-full" style={{ background: EVENT_CONFIG.color }} />
+              
+              <div className="relative z-10 space-y-3">
+                <div className="flex items-start justify-between">
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center shadow-lg" style={{ background: EVENT_CONFIG.color }}>
+                    <IconMapPin size={16} color="white" />
+                  </div>
+                  <div className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border" style={{ color: EVENT_CONFIG.color, borderColor: `${EVENT_CONFIG.color}30`, background: `${EVENT_CONFIG.color}10` }}>
+                    {selectedEvent.eventStatus}
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="text-sm font-bold text-white leading-tight">{selectedEvent.subeventName}</h3>
+                  <p className="text-[10px] font-medium mt-1 text-white/50">{selectedEvent.location}</p>
+                </div>
+
+                <div className="pt-2 border-t border-white/5 flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <IconCalendar size={12} color={EVENT_CONFIG.color} />
+                    <div>
+                      <p className="text-[10px] font-semibold text-white/90">{selectedEvent.startDate}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <IconClock size={12} color={EVENT_CONFIG.color} />
+                    <div className="text-right">
+                      <p className="text-[10px] font-semibold text-white/90">{selectedEvent.startTime}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Popup>
+        )}
+      </Map>
+    </div>
   );
 }

@@ -2,16 +2,20 @@ import { useState, useEffect, useCallback } from 'react';
 import MapView from './components/MapView';
 import Sidebar from './components/Sidebar';
 import StatsBar from './components/StatsBar';
-import { API_URL } from './config';
+import { API_URL, EVENT_API_URL, calculateDistance, EVENT_CONFIG } from './config';
 import { IconMenu } from './components/Icons';
 import { SettingsProvider, useSettings } from './SettingsContext.jsx';
 
 function AppContent() {
   const { settings } = useSettings();
   const [creators, setCreators] = useState([]);
+  const [event, setEvent] = useState(null);
+  const [eventRadius, setEventRadius] = useState(EVENT_CONFIG.radius);
+  const [filterByProximity, setFilterByProximity] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedCreator, setSelectedCreator] = useState(null);
+  const [selectedEvent, setSelectedEvent] = useState(null);
   const [flyTo, setFlyTo] = useState(null);
   const [filters, setFilters] = useState({
     search: '',
@@ -27,26 +31,31 @@ function AppContent() {
     const handleResize = () => {
       const mobile = window.innerWidth <= 768;
       setIsMobile(mobile);
-      if (!mobile && !sidebarOpen) {
-        // Keep it open on desktop by default if screen grows
-      }
     };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [sidebarOpen]);
+  }, []);
 
   useEffect(() => {
-    fetch(API_URL)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success) setCreators(data.data);
-        else setError('Failed to fetch creator data');
+    setLoading(true);
+    Promise.all([
+      fetch(API_URL).then(res => res.json()),
+      fetch(EVENT_API_URL).then(res => res.json())
+    ])
+      .then(([creatorsData, eventData]) => {
+        if (creatorsData.success) setCreators(creatorsData.data);
+        if (eventData.success) setEvent(eventData.data);
+        
+        if (!creatorsData.success && !eventData.success) {
+          setError('Failed to fetch data');
+        }
       })
       .catch(() => setError('Network error'))
       .finally(() => setLoading(false));
   }, []);
 
   const filteredCreators = creators.filter((c) => {
+    // 1. Basic Filters
     const q = filters.search.toLowerCase();
     const matchesSearch =
       !q ||
@@ -57,11 +66,28 @@ function AppContent() {
     const matchesStatus = filters.status === 'ALL' || c.status === filters.status;
     const matchesGender = filters.gender === 'ALL' || c.gender === filters.gender;
     const matchesAvailability = filters.availability === 'ALL' || c.availability === filters.availability;
-    return matchesSearch && matchesStatus && matchesGender && matchesAvailability;
+    
+    // 2. Proximity Filter
+    let matchesProximity = true;
+    if (filterByProximity && event?.venueLocation?.coordinates) {
+      const [eventLon, eventLat] = event.venueLocation.coordinates;
+      const creatorCoords = (c.locationCoordinates || c.location)?.coordinates;
+      
+      if (creatorCoords) {
+        const [creLon, creLat] = creatorCoords;
+        const dist = calculateDistance(eventLat, eventLon, creLat, creLon);
+        matchesProximity = dist <= eventRadius;
+      } else {
+        matchesProximity = false; // Hide creators without coordinates if proximity is on
+      }
+    }
+
+    return matchesSearch && matchesStatus && matchesGender && matchesAvailability && matchesProximity;
   });
 
   const handleCreatorClick = useCallback((creator) => {
     setSelectedCreator(creator);
+    setSelectedEvent(null);
     if (isMobile) setSidebarOpen(false);
     
     const coords = (creator.locationCoordinates || creator.location)?.coordinates;
@@ -75,8 +101,23 @@ function AppContent() {
     }
   }, [isMobile]);
 
+  const handleEventClick = useCallback((event) => {
+    setSelectedEvent(event);
+    setSelectedCreator(null);
+    const coords = event?.venueLocation?.coordinates;
+    if (coords) {
+      setFlyTo({
+        longitude: coords[0],
+        latitude: coords[1],
+        zoom: 14,
+        id: Date.now(),
+      });
+    }
+  }, []);
+
   const handleMapClick = useCallback(() => {
     setSelectedCreator(null);
+    setSelectedEvent(null);
   }, []);
 
   if (loading) {
@@ -84,7 +125,7 @@ function AppContent() {
       <div className="h-screen w-screen flex items-center justify-center" style={{ background: settings.COLORS.bg }}>
         <div className="flex flex-col items-center gap-4">
           <div className="w-10 h-10 rounded-full border-2 border-[#262a36] border-t-[#4f7df9] animate-spin" />
-          <p className="text-[#9498a6] text-sm">Loading creators…</p>
+          <p className="text-[#9498a6] text-sm">Loading data…</p>
         </div>
       </div>
     );
@@ -117,6 +158,12 @@ function AppContent() {
         <Sidebar
           creators={filteredCreators}
           allCreators={creators}
+          event={event}
+          eventRadius={eventRadius}
+          onEventRadiusChange={setEventRadius}
+          filterByProximity={filterByProximity}
+          onFilterByProximityChange={setFilterByProximity}
+          onEventClick={handleEventClick}
           selectedCreator={selectedCreator}
           onCreatorClick={handleCreatorClick}
           filters={filters}
@@ -132,7 +179,12 @@ function AppContent() {
       <div className="flex-1 relative">
         <MapView
           creators={filteredCreators}
+          event={event}
+          eventRadius={eventRadius}
+          filterByProximity={filterByProximity}
+          onEventClick={handleEventClick}
           selectedCreator={selectedCreator}
+          selectedEvent={selectedEvent}
           onCreatorClick={handleCreatorClick}
           onMapClick={handleMapClick}
           flyTo={flyTo}

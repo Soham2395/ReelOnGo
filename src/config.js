@@ -1,4 +1,5 @@
 export const API_URL = 'https://staging-api.reelongo.com/crm/creators/map-locator/locations';
+export const EVENT_API_URL = 'https://staging-api.reelongo.com/crm/events/subevent/subevent-map-locator/ROGL2510-E76-S1';
 
 export const MAP_CONFIG = {
   style: 'mapbox://styles/mapbox/dark-v11',
@@ -128,6 +129,15 @@ export const RANK_CONFIG = {
   Platinum: { label: 'Platinum', color: '#8fa3b8' },
 };
 
+// ── EVENT CONFIG ──────────────────────────────────────────
+export const EVENT_CONFIG = {
+  radius: 10,                 
+  color: '#ff4d4d',       
+  markerSize: 24,
+  circleOpacity: 0.15,
+  circleBorderOpacity: 0.4,
+};
+
 // ── SIDEBAR CONFIG ───────────────────────────────────────
 export const SIDEBAR_CONFIG = {
   width: 380,                // px
@@ -162,4 +172,16 @@ export function getCity(locationName) {
 
 export function getUniqueValues(creators, key) {
   return [...new Set(creators.map((c) => c[key]).filter(Boolean))].sort();
+}
+
+export function calculateDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371; 
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
 }
