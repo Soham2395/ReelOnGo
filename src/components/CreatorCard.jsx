@@ -1,10 +1,19 @@
+import { useMemo } from 'react';
 import { useSettings } from '../SettingsContext.jsx';
-import { getInitials } from '../config';
+import { getInitials, calculateDistance } from '../config';
 import { IconChevronRight } from './Icons';
 
-export default function CreatorCard({ creator, isSelected, onClick }) {
+export default function CreatorCard({ creator, isSelected, onClick, selectedEvent }) {
   const { settings, getStatusConfig } = useSettings();
   const status = getStatusConfig(creator.status);
+
+  const distance = useMemo(() => {
+    if (!selectedEvent?.venueLocation?.coordinates) return null;
+    const [eventLon, eventLat] = selectedEvent.venueLocation.coordinates;
+    const creatorCoords = (creator.locationCoordinates || creator.location)?.coordinates;
+    if (!creatorCoords) return null;
+    return calculateDistance(eventLat, eventLon, creatorCoords[1], creatorCoords[0]);
+  }, [selectedEvent, creator]);
 
   return (
     <button
@@ -24,11 +33,13 @@ export default function CreatorCard({ creator, isSelected, onClick }) {
         </div>
 
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-between gap-2">
             <h4 className="text-[13px] font-medium text-white truncate">{creator.creatorName}</h4>
-            <span className="text-[10px] font-mono shrink-0" style={{ color: settings.COLORS.textMuted }}>
-              {creator.creatorCode}
-            </span>
+            {distance !== null && (
+              <div className="px-1.5 py-0.5 rounded-md bg-white/5 border border-white/10 shrink-0">
+                <span className="text-[9px] font-bold text-white/40 tabular-nums">{distance.toFixed(1)}km</span>
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2 mt-0.5">
             <span

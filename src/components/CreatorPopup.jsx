@@ -2,7 +2,7 @@ import { useSettings } from '../SettingsContext.jsx';
 import { getInitials } from '../config';
 import { IconMapPin, IconSmartphone, IconHash, IconUser, IconClock, IconCamera, IconPhone, IconMail, IconExternalLink, IconX } from './Icons';
 
-export default function CreatorPopup({ creator, onClose }) {
+export default function CreatorPopup({ creator, distance, onClose }) {
   const { settings, getStatusConfig } = useSettings();
   const status = getStatusConfig(creator.status);
   const rank = settings.RANK_CONFIG[creator.rank] || settings.RANK_CONFIG.Bronze;
@@ -29,10 +29,19 @@ export default function CreatorPopup({ creator, onClose }) {
         >
           {getInitials(creator.creatorName)}
         </div>
-        <div className="min-w-0">
-          <h3 className="text-white font-semibold text-sm truncate leading-tight">
-            {creator.creatorName}
-          </h3>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-between mb-1">
+            <h3 className="text-white font-semibold text-sm truncate leading-tight">
+              {creator.creatorName}
+            </h3>
+            {distance !== null && (
+              <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-white/5 border border-white/10 shrink-0">
+                <span className="text-[10px] font-bold text-white/90 tabular-nums">
+                  {distance.toFixed(1)} <span className="text-[8px] font-normal opacity-40 uppercase ml-px">km</span>
+                </span>
+              </div>
+            )}
+          </div>
           <div className="flex items-center gap-2 mt-0.5">
             <span
               className="text-[10px] font-medium px-1.5 py-0.5 rounded"

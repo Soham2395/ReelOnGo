@@ -107,7 +107,6 @@ function AppContent() {
 
   const handleCreatorClick = useCallback((creator) => {
     setSelectedCreator(creator);
-    setSelectedEvent(null);
     if (isMobile) setSidebarOpen(false);
     
     const coords = (creator.locationCoordinates || creator.location)?.coordinates;

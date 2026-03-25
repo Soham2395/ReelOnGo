@@ -384,6 +384,7 @@ export default function Sidebar({
                       isSelected={selectedCreator?._id === creator._id}
                       onClick={() => onCreatorClick(creator)}
                       statusConfig={getStatusConfig(creator.status)}
+                      selectedEvent={selectedEvent}
                     />
                   ))
                 ) : (
