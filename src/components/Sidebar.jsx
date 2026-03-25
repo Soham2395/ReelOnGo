@@ -195,27 +195,10 @@ export default function Sidebar({
                 </div>
               </div>
 
-              <div className="space-y-2.5 relative z-10 px-1">
-                {Object.entries(STATUS_CONFIG).map(([key, config]) => (
-                  <div key={key} className="flex items-center justify-between group">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-2 h-2 rounded-full shadow-[0_0_8px_rgba(0,0,0,0.5)]" style={{ background: config.color }} />
-                      <span className="text-[11px] font-medium text-white/70 group-hover:text-white transition-colors capitalize">{config.label.toLowerCase()}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="h-1 w-12 rounded-full bg-white/5 overflow-hidden">
-                        <div 
-                          className="h-full rounded-full transition-all duration-1000" 
-                          style={{ 
-                            background: config.color, 
-                            width: `${(statusCounts[key] || 0) / allCreators.length * 100}%` 
-                          }} 
-                        />
-                      </div>
-                      <span className="text-[11px] font-bold text-white/90 min-w-[20px] text-right">{statusCounts[key] || 0}</span>
-                    </div>
-                  </div>
-                ))}
+              <div className="pt-2">
+                <p className="text-[10px] italic leading-relaxed" style={{ color: settings.COLORS.textMuted }}>
+                  Showing current network of verified active creators.
+                </p>
               </div>
             </div>
           </div>
@@ -456,17 +439,28 @@ export default function Sidebar({
                         </button>
                       </div>
 
-                      <div className="space-y-3">
-                        <div className="flex justify-between items-end">
-                          <span className="text-[10px] font-bold text-white/40 uppercase">Search Range</span>
-                          <span className="text-xl font-bold text-white tabular-nums">{eventRadius}<span className="text-xs font-normal text-white/40 ml-0.5">km</span></span>
+                      <div className="space-y-4">
+                        <div className="flex justify-between items-center text-[10px] font-bold text-white/40 uppercase tracking-widest px-1">
+                          <span>Search Range</span>
+                          <span className="text-white/80 tabular-nums font-mono">{eventRadius}km</span>
                         </div>
-                        <input 
-                          type="range" min="1" max="50" step="1"
-                          value={eventRadius} 
-                          onChange={(e) => onEventRadiusChange(parseInt(e.target.value))}
-                          className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-[#ff4d4d]"
-                        />
+                        <div className="grid grid-cols-5 gap-2 px-1">
+                          {[5, 10, 15, 20, 25].map(val => (
+                            <button
+                              key={val}
+                              onClick={() => onEventRadiusChange(val)}
+                              className="py-2.5 text-[10px] font-bold rounded-xl border transition-all duration-200"
+                              style={{ 
+                                background: eventRadius === val ? `${EVENT_CONFIG.color}20` : 'rgba(255,255,255,0.03)',
+                                color: eventRadius === val ? EVENT_CONFIG.color : 'rgba(255,255,255,0.4)',
+                                borderColor: eventRadius === val ? `${EVENT_CONFIG.color}40` : 'rgba(255,255,255,0.05)',
+                                boxShadow: eventRadius === val ? `0 0 12px ${EVENT_CONFIG.color}15` : 'none'
+                              }}
+                            >
+                              {val}km
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     </div>
                   </div>

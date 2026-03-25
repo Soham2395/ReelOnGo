@@ -1,4 +1,4 @@
-import { useMemo, useRef, useEffect, useState } from 'react';
+import { useMemo, useRef, useEffect, useState, useCallback } from 'react';
 import Map, { 
   Marker, 
   Popup, 
@@ -8,6 +8,7 @@ import Map, {
   Layer
 } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
+import Supercluster from 'supercluster';
 import { 
   MAP_CONFIG, 
   MARKER_CONFIG, 
@@ -43,6 +44,96 @@ export default function MapView({
   const { settings, getStatusConfig } = useSettings();
   const [hoveredCreator, setHoveredCreator] = useState(null);
   const [isMapReady, setIsMapReady] = useState(false);
+  const [zoom, setZoom] = useState(MAP_CONFIG.center.zoom);
+  const [bounds, setBounds] = useState(null);
+  const [index, setIndex] = useState(null);
+
+  // Convert creators to GeoJSON features for supercluster
+  const points = useMemo(() => {
+    return creators
+      .map(creator => {
+        const coords = (creator.locationCoordinates || creator.location)?.coordinates;
+        if (!coords || !coords[0] || !coords[1]) return null;
+        
+        return {
+          type: "Feature",
+          properties: { 
+            cluster: false, 
+            creatorId: creator._id, 
+            creator: creator, 
+            category: creator.status 
+          },
+          geometry: {
+            type: "Point",
+            coordinates: coords
+          }
+        };
+      })
+      .filter(Boolean);
+  }, [creators]);
+
+  // Initialize/Update Supercluster Index
+  useEffect(() => {
+    if (points.length > 0) {
+      const sc = new Supercluster({
+        radius: settings.MAP_CONFIG.clusterRadius || 50,
+        maxZoom: 20
+      });
+      sc.load(points);
+      setIndex(sc);
+    } else {
+      setIndex(null);
+    }
+  }, [points, settings.MAP_CONFIG.clusterRadius]);
+
+  // Get clusters from index
+  const clusters = useMemo(() => {
+    if (index && bounds && bounds.length === 4) {
+      try {
+        return index.getClusters(bounds, Math.floor(zoom));
+      } catch (e) {
+        console.error("Clustering error:", e);
+        return [];
+      }
+    }
+    return [];
+  }, [index, bounds, zoom]);
+
+  // Function to handle cluster click
+  const handleClusterClick = useCallback((clusterId, latitude, longitude) => {
+    if (!index) return;
+    try {
+      const expansionZoom = Math.min(
+        index.getClusterExpansionZoom(clusterId),
+        20
+      );
+      
+      if (mapRef.current) {
+        mapRef.current.flyTo({
+          center: [longitude, latitude],
+          zoom: expansionZoom,
+          duration: 1000
+        });
+      }
+    } catch (e) {
+      console.error("Cluster expansion error:", e);
+    }
+  }, [index]);
+
+  // Update bounds on move
+  const onMove = useCallback((evt) => {
+    setZoom(evt.viewState.zoom);
+    const box = mapRef.current.getMap().getBounds().toArray();
+    setBounds([box[0][0], box[0][1], box[1][0], box[1][1]]);
+  }, []);
+
+  // Update bounds initially when map is ready
+  useEffect(() => {
+    if (isMapReady && mapRef.current) {
+      const box = mapRef.current.getMap().getBounds().toArray();
+      setBounds([box[0][0], box[0][1], box[1][0], box[1][1]]);
+    }
+  }, [isMapReady]);
 
   // Grouping creators into status-based clusters or heatmaps
   const heatmapData = useMemo(() => {
@@ -119,7 +210,10 @@ export default function MapView({
     <div className="w-full h-full relative">
       <Map
         ref={mapRef}
-        onLoad={() => setIsMapReady(true)}
+        onLoad={() => {
+          setIsMapReady(true);
+        }}
+        onMove={onMove}
         initialViewState={{
           longitude: MAP_CONFIG.center.longitude,
           latitude: MAP_CONFIG.center.latitude,
@@ -196,20 +290,48 @@ export default function MapView({
         )}
 
         {/* Markers Layer */}
-        {viewMode === 'markers' && creators.map((creator) => {
-          const coords = (creator.locationCoordinates || creator.location)?.coordinates;
-          if (!coords) return null;
-          
-          const isSelected = selectedCreator?._id === creator._id;
-          const isHovered = hoveredCreator?._id === creator._id;
+        {viewMode === 'markers' && clusters.map((cluster) => {
+          const [longitude, latitude] = cluster.geometry.coordinates;
+          const { cluster: isCluster, point_count: pointCount } = cluster.properties;
+
+          if (isCluster) {
+            return (
+              <Marker
+                key={`cluster-${cluster.id}`}
+                longitude={longitude}
+                latitude={latitude}
+                onClick={(e) => {
+                  e.originalEvent.stopPropagation();
+                  handleClusterClick(cluster.id, latitude, longitude);
+                }}
+              >
+                <div 
+                  className="flex items-center justify-center rounded-full border-2 border-white/40 text-white font-bold cursor-pointer transition-all hover:scale-110 shadow-2xl backdrop-blur-md"
+                  style={{
+                    width: `${Math.max(32, Math.min(32 + pointCount * 0.5, 48))}px`,
+                    height: `${Math.max(32, Math.min(32 + pointCount * 0.5, 48))}px`,
+                    background: settings.COLORS.accent,
+                    fontSize: '11px',
+                    boxShadow: `0 0 15px ${settings.COLORS.accent}60`
+                  }}
+                >
+                  {pointCount}
+                </div>
+              </Marker>
+            );
+          }
+
+          const creator = cluster.properties.creator;
+          const isSelected = selectedCreator?._id === creator?._id;
+          const isHovered = hoveredCreator?._id === creator?._id;
           const statusConfig = getStatusConfig(creator.status);
           const iconColor = settings.MARKER_CONFIG.useStatusColor ? statusConfig.color : settings.MARKER_CONFIG.customColor;
           
           return (
             <Marker
               key={creator._id}
-              longitude={coords[0]}
-              latitude={coords[1]}
+              longitude={longitude}
+              latitude={latitude}
               onClick={(e) => {
                 e.originalEvent.stopPropagation();
                 onCreatorClick(creator);

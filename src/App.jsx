@@ -43,7 +43,10 @@ function AppContent() {
       fetch(EVENT_API_URL).then(res => res.json())
     ])
       .then(([creatorsData, eventData]) => {
-        if (creatorsData.success) setCreators(creatorsData.data);
+        if (creatorsData.success) {
+          const activeCreators = creatorsData.data.filter(c => c.status === 'ACTIVE');
+          setCreators(activeCreators);
+        }
         
         if (eventData.success) {
           const fetchedEvents = Array.isArray(eventData.data) ? eventData.data : [eventData.data];

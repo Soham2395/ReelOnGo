@@ -8,21 +8,13 @@ export default function FilterControls({ filters, onFiltersChange, statuses, gen
   };
 
   const handleClear = () => {
-    onFiltersChange({ ...filters, status: 'ALL', gender: 'ALL', availability: 'ALL' });
+    onFiltersChange({ ...filters, gender: 'ALL', availability: 'ALL' });
   };
 
-  const hasActiveFilters = filters.status !== 'ALL' || filters.gender !== 'ALL' || filters.availability !== 'ALL';
+  const hasActiveFilters = filters.gender !== 'ALL' || filters.availability !== 'ALL';
 
   return (
-    <div className="mt-2 pt-3 grid grid-cols-3 gap-2" style={{ borderTop: `1px solid ${settings.COLORS.border}` }}>
-      <FilterSelect 
-        label="Status" 
-        value={filters.status} 
-        onChange={(v) => handleChange('status', v)} 
-        options={statuses} 
-        formatLabel={(v) => getStatusConfig(v).label} 
-        settings={settings}
-      />
+    <div className="mt-2 pt-3 grid grid-cols-2 gap-4" style={{ borderTop: `1px solid ${settings.COLORS.border}` }}>
       <FilterSelect 
         label="Gender" 
         value={filters.gender} 
@@ -38,7 +30,7 @@ export default function FilterControls({ filters, onFiltersChange, statuses, gen
         settings={settings}
       />
       {hasActiveFilters && (
-        <div className="col-span-3 pt-1 flex justify-center">
+        <div className="col-span-2 pt-1 flex justify-center">
           <button 
             onClick={handleClear} 
             className="text-[9px] font-bold uppercase tracking-widest px-2 py-1 rounded transition-colors hover:bg-white/5" 
