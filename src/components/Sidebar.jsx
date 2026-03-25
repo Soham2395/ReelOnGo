@@ -6,7 +6,8 @@ import {
   IconX,
   IconInfo,
   IconUser,
-  IconMapPin
+  IconMapPin,
+  IconSearch
 } from './Icons';
 import FilterControls from './FilterControls';
 import EventCard from './EventCard';
@@ -35,7 +36,7 @@ export default function Sidebar({
   isMobile 
 }) {
   const { settings, updateSettings, getStatusConfig } = useSettings();
-  const [activeTab, setActiveTab] = useState('creators');
+  const [activeTab, setActiveTab] = useState('events');
   const [showConfig, setShowConfig] = useState(false);
   const [showStats, setShowStats] = useState(false);
 
@@ -59,6 +60,55 @@ export default function Sidebar({
   const handleMapStyleChange = (style) => {
     updateSettings('MAP_CONFIG.style', style);
   };
+
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+
+  const ViewSwitcher = () => (
+    <div className="relative">
+      <button 
+        onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+        className="flex items-center gap-2 px-0 text-[13px] font-bold uppercase tracking-[0.2em] text-white/90 hover:text-white transition-all group focus:outline-none"
+      >
+        <span>{activeTab === 'events' ? 'Active Events' : 'All Creators'}</span>
+        <span className="text-[10px] opacity-40 group-hover:opacity-100 transition-opacity ml-1">
+          <svg width="10" height="6" viewBox="0 0 10 6" fill="none" className={`transition-transform duration-300 ${isDropdownOpen ? 'rotate-180' : ''}`}>
+            <path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </span>
+      </button>
+
+      {isDropdownOpen && (
+        <div 
+          className="absolute top-full left-0 mt-2 w-56 py-2 rounded-2xl shadow-2xl border z-[100] animate-in fade-in slide-in-from-top-2 duration-200"
+          style={{ 
+            background: 'rgba(22, 25, 33, 0.98)', 
+            borderColor: settings.COLORS.border,
+            backdropFilter: 'blur(20px)'
+          }}
+        >
+          {[
+            { id: 'events', label: 'Active Events', count: events.length, icon: '📅' },
+            { id: 'creators', label: 'All Creators', count: creators.length, icon: '👥' }
+          ].map((option) => (
+            <button
+              key={option.id}
+              onClick={() => {
+                setActiveTab(option.id);
+                setIsDropdownOpen(false);
+              }}
+              className={`w-full flex items-center justify-between px-4 py-3 transition-colors hover:bg-white/5 ${activeTab === option.id ? 'bg-white/5' : ''}`}
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-sm">{option.icon}</span>
+                <span className={`text-xs font-bold uppercase tracking-wider ${activeTab === option.id ? 'text-white' : 'text-white/40'}`}>{option.label}</span>
+              </div>
+              <span className="text-[10px] font-mono opacity-30">{option.count}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <aside 
@@ -171,51 +221,55 @@ export default function Sidebar({
           </div>
         )}
 
-        {/* Tab Switcher */}
-        <div className="flex px-4 pt-4 border-b gap-6" style={{ borderColor: settings.COLORS.border }}>
-          <button
-            onClick={() => setActiveTab('creators')}
-            className={`pb-3 text-[11px] font-bold uppercase tracking-wider transition-all relative ${activeTab === 'creators' ? 'text-white' : 'text-white/30 hover:text-white/50'}`}
-          >
-            <div className="flex items-center gap-2">
-              <IconUser size={13} />
-              <span>Creators</span>
-            </div>
-            {activeTab === 'creators' && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-t-full" style={{ background: settings.COLORS.accent }} />
-            )}
-          </button>
-          <button
-            onClick={() => setActiveTab('events')}
-            className={`pb-3 text-[11px] font-bold uppercase tracking-wider transition-all relative ${activeTab === 'events' ? 'text-white' : 'text-white/30 hover:text-white/50'}`}
-          >
-            <div className="flex items-center gap-2">
-              <IconMapPin size={13} />
-              <span>Events</span>
-            </div>
-            {activeTab === 'events' && (
-              <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-t-full" style={{ background: EVENT_CONFIG.color }} />
-            )}
-          </button>
-        </div>
+
 
         {/* Tab Content */}
         <div className="flex-1 flex flex-col overflow-hidden">
-          {activeTab === 'creators' ? (
-            <>
-              {/* Primary Navigation & Search */}
-              <div className="p-4 space-y-4 shadow-sm z-10 border-b" style={{ borderColor: settings.COLORS.border }}>
-                <FilterControls 
-                  filters={filters} 
-                  onFiltersChange={onFiltersChange} 
-                  statuses={statuses}
-                  genders={genders}
-                  availabilities={availabilities}
-                />
+          {/* Global Search & Filters & View Switcher */}
+          <div className="p-4 space-y-4 shadow-sm z-10 border-b" style={{ borderColor: settings.COLORS.border }}>
+            <div className="relative group">
+              <div className="absolute left-3 top-1/2 -translate-y-1/2 transition-colors group-focus-within:text-[#4f7df9]" style={{ color: settings.COLORS.textMuted }}>
+                <IconSearch size={14} />
               </div>
+              <input
+                type="text"
+                placeholder="Search creators, locations..."
+                className="w-full pl-9 pr-4 py-2 text-xs rounded-xl focus:outline-none transition-all border"
+                style={{ 
+                  background: settings.COLORS.surfaceLight, 
+                  color: settings.COLORS.textPrimary,
+                  borderColor: settings.COLORS.border
+                }}
+                value={filters.search}
+                onChange={(e) => onFiltersChange({ ...filters, search: e.target.value })}
+              />
+              {filters.search && (
+                <button 
+                  onClick={() => onFiltersChange({ ...filters, search: '' })}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 hover:text-white transition-colors"
+                  style={{ color: settings.COLORS.textMuted }}
+                >
+                  <IconX size={12} />
+                </button>
+              )}
+            </div>
 
-              {/* Integrated Configuration Section */}
-              <div className="px-4 py-3 border-b" style={{ borderColor: settings.COLORS.border }}>
+            <FilterControls 
+              filters={filters} 
+              onFiltersChange={onFiltersChange} 
+              statuses={statuses}
+              genders={genders}
+              availabilities={availabilities}
+            />
+
+
+          </div>
+
+          <div className="flex-1 flex flex-col overflow-hidden">
+            {activeTab === 'creators' ? (
+              <>
+                {/* Integrated Configuration Section */}
+                <div className="px-4 py-3 border-b" style={{ borderColor: settings.COLORS.border }}>
                  <button 
                    onClick={() => setShowConfig(!showConfig)}
                    className="w-full flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-white/40 hover:text-white/60 transition-colors"
@@ -337,8 +391,8 @@ export default function Sidebar({
 
               {/* Creator List */}
               <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-3 custom-scrollbar">
-                <div className="flex items-center justify-between mb-1 mt-4">
-                  <h2 className="text-[11px] font-semibold uppercase tracking-wider text-white/30">Creators ({creators.length})</h2>
+                <div className="flex items-center justify-between mb-4 mt-6">
+                  <ViewSwitcher />
                 </div>
                 
                 {creators.length > 0 ? (
@@ -364,9 +418,12 @@ export default function Sidebar({
           ) : (
             /* Events Tab Content (Simplified) */
             <div className="flex-1 flex flex-col overflow-hidden">
-              <div className="flex-1 overflow-y-auto px-4 py-6 custom-scrollbar space-y-6">
+              <div className="flex-1 overflow-y-auto px-4 py-3 custom-scrollbar space-y-6">
+                <div className="flex items-center justify-between mb-4 mt-6 px-1">
+                  <ViewSwitcher />
+                </div>
+                
                 <div className="space-y-3">
-                  <h2 className="text-[11px] font-semibold uppercase tracking-wider text-white/30 px-1">Active Events ({events.length})</h2>
                   {events.length > 0 ? (
                     events.map((evt) => (
                       <EventCard 
@@ -421,6 +478,7 @@ export default function Sidebar({
           )}
         </div>
       </div>
-    </aside>
+    </div>
+  </aside>
   );
 }

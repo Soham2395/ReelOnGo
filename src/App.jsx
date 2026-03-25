@@ -48,9 +48,17 @@ function AppContent() {
         if (eventData.success) {
           const fetchedEvents = Array.isArray(eventData.data) ? eventData.data : [eventData.data];
           setEvents(fetchedEvents);
-          // Set initial selected event for proximity filtering
+          // Set initial selected event for proximity filtering and map focus
           if (fetchedEvents.length > 0) {
-            setSelectedEvent(fetchedEvents[0]);
+            const firstEvent = fetchedEvents[0];
+            setSelectedEvent(firstEvent);
+            if (firstEvent.venueLocation?.coordinates) {
+              setFlyTo({
+                center: firstEvent.venueLocation.coordinates,
+                zoom: 13,
+                duration: 1500 
+              });
+            }
           }
         }
         
@@ -62,6 +70,7 @@ function AppContent() {
       .finally(() => setLoading(false));
   }, []);
 
+  // Remove the previous useEffect (lines 65-77)
   const filteredCreators = creators.filter((c) => {
     // 1. Basic Filters
     const q = filters.search.toLowerCase();

@@ -42,6 +42,7 @@ export default function MapView({
   const mapRef = useRef();
   const { settings, getStatusConfig } = useSettings();
   const [hoveredCreator, setHoveredCreator] = useState(null);
+  const [isMapReady, setIsMapReady] = useState(false);
 
   // Grouping creators into status-based clusters or heatmaps
   const heatmapData = useMemo(() => {
@@ -87,15 +88,19 @@ export default function MapView({
 
   // Handle flyTo changes
   useEffect(() => {
-    if (flyTo && mapRef.current) {
-      mapRef.current.flyTo({
-        center: [flyTo.longitude, flyTo.latitude],
-        zoom: flyTo.zoom || 14,
-        duration: MAP_CONFIG.flyToDuration,
-        essential: true
-      });
+    if (flyTo && mapRef.current && isMapReady) {
+      const center = flyTo.center || [flyTo.longitude, flyTo.latitude];
+      
+      if (center[0] && center[1]) {
+        mapRef.current.flyTo({
+          center: center,
+          zoom: flyTo.zoom ?? 14,
+          duration: flyTo.duration ?? MAP_CONFIG.flyToDuration,
+          essential: true
+        });
+      }
     }
-  }, [flyTo]);
+  }, [flyTo, isMapReady]);
 
   // Handle sidebar resize
   useEffect(() => {
@@ -114,6 +119,7 @@ export default function MapView({
     <div className="w-full h-full relative">
       <Map
         ref={mapRef}
+        onLoad={() => setIsMapReady(true)}
         initialViewState={{
           longitude: MAP_CONFIG.center.longitude,
           latitude: MAP_CONFIG.center.latitude,
@@ -211,7 +217,7 @@ export default function MapView({
               style={{ cursor: 'pointer', zIndex: isSelected ? 10 : 1 }}
             >
               <div 
-                className="relative flex items-center justify-center transition-all duration-300"
+                className="relative flex flex-col items-center justify-center transition-all duration-300"
                 onMouseEnter={() => setHoveredCreator(creator)}
                 onMouseLeave={() => setHoveredCreator(null)}
                 style={{ 
@@ -220,12 +226,12 @@ export default function MapView({
               >
                 {/* Visual Glow */}
                 {(isSelected || isHovered) && (
-                  <div className="absolute inset-0 rounded-full blur-md opacity-50" style={{ background: iconColor }} />
+                  <div className="absolute inset-0 rounded-full blur-md opacity-50" style={{ background: iconColor, width: settings.MARKER_CONFIG.size, height: settings.MARKER_CONFIG.size, margin: 'auto' }} />
                 )}
                 
                 {/* Marker Body */}
                 <div 
-                  className="w-full h-full rounded-full border-2 shadow-lg flex items-center justify-center bg-white transition-colors"
+                  className="rounded-full border-2 shadow-lg flex items-center justify-center bg-white transition-colors relative z-10"
                   style={{ 
                     width: settings.MARKER_CONFIG.size, 
                     height: settings.MARKER_CONFIG.size,
@@ -234,6 +240,18 @@ export default function MapView({
                   }}
                 >
                   <IconUser size={settings.MARKER_CONFIG.size * 0.7} color={isSelected ? '#fff' : iconColor} />
+                </div>
+
+                {/* Name Label */}
+                <div 
+                  className="absolute top-full mt-1.5 px-2 py-0.5 rounded-full text-[9px] font-bold whitespace-nowrap pointer-events-none shadow-xl border border-white/20 select-none transition-all z-20 backdrop-blur-md"
+                  style={{ 
+                    background: isSelected ? iconColor : 'rgba(22, 25, 33, 0.85)',
+                    color: '#fff',
+                    boxShadow: `0 4px 12px rgba(0,0,0,0.3), 0 0 8px ${iconColor}20`
+                  }}
+                >
+                  {creator.creatorName}
                 </div>
               </div>
             </Marker>
