@@ -78,6 +78,16 @@ export const STATUS_CONFIG = {
     color: COLORS.statusChecked,
     bg: 'rgba(62, 189, 214, 0.1)',
   },
+  ONBOARDING_STARTED: {
+    label: 'Onboarding',
+    color: COLORS.statusOnboarded,
+    bg: 'rgba(79, 125, 249, 0.1)',
+  },
+  ONBOARDING_INITIATED: {
+    label: 'Onboarding',
+    color: COLORS.statusOnboarded,
+    bg: 'rgba(79, 125, 249, 0.1)',
+  },
 };
 
 // ── MARKER CONFIG ────────────────────────────────────────

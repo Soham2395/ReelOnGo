@@ -30,15 +30,27 @@ export default function EventCard({ event, isSelected, onClick }) {
           </div>
           <div className="flex items-center gap-2 mt-0.5">
             <span
-              className="text-[10px] font-medium px-1.5 py-px rounded border"
+              className="text-[10px] font-bold px-1.5 py-px rounded border"
               style={{ color: EVENT_CONFIG.color, borderColor: `${EVENT_CONFIG.color}30`, background: `${EVENT_CONFIG.color}10` }}
             >
-              {event.eventStatus}
+              EVENT
             </span>
             <span className="text-[10px] truncate" style={{ color: settings.COLORS.textMuted }}>
-              {event.startDate || 'No date'}
+              {event.subeventStart ? new Date(event.subeventStart).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) : 'No date'}
             </span>
           </div>
+          {event.subeventStart && event.subeventEnd && (
+            <div className="flex items-center gap-1.5 mt-1">
+              <span className="text-[10px] font-medium text-white/40 tabular-nums">
+                {new Date(event.subeventStart).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })} - {new Date(event.subeventEnd).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
+              </span>
+            </div>
+          )}
+          {event.venue && (
+            <div className="text-[9px] text-white/30 mt-1 truncate max-w-[200px]">
+               {event.venue.split(',')[0]}
+            </div>
+          )}
         </div>
 
         <IconChevronRight

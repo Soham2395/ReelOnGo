@@ -10,7 +10,8 @@ export default function CreatorCard({ creator, isSelected, onClick, selectedEven
   const distance = useMemo(() => {
     if (!selectedEvent?.venueLocation?.coordinates) return null;
     const [eventLon, eventLat] = selectedEvent.venueLocation.coordinates;
-    const creatorCoords = (creator.locationCoordinates || creator.location)?.coordinates;
+    const creatorCoords = creator.activeAssignment?.currentCoordinates || 
+                         (creator.locationCoordinates || creator.location)?.coordinates;
     if (!creatorCoords) return null;
     return calculateDistance(eventLat, eventLon, creatorCoords[1], creatorCoords[0]);
   }, [selectedEvent, creator]);
@@ -41,17 +42,40 @@ export default function CreatorCard({ creator, isSelected, onClick, selectedEven
               </div>
             )}
           </div>
-          <div className="flex items-center gap-2 mt-0.5">
-            <span
-              className="text-[10px] font-medium px-1.5 py-px rounded"
-              style={{ color: status.color, background: status.bg }}
-            >
-              {status.label}
-            </span>
-            {creator.locationName && creator.locationName !== 'N/A' && (
-              <span className="text-[10px] truncate" style={{ color: settings.COLORS.textMuted }}>
-                {creator.locationName.split(',')[0]}
+          <div className="flex flex-col gap-1.5 mt-1">
+            <div className="flex items-center gap-2">
+              <span
+                className="text-[10px] font-medium px-1.5 py-px rounded shrink-0"
+                style={{ color: status.color, background: status.bg }}
+              >
+                {status.label}
               </span>
+              {!creator.activeAssignment?.isActive && creator.locationName && creator.locationName !== 'N/A' && (
+                <span className="text-[10px] truncate opacity-50" style={{ color: settings.COLORS.textSecondary }}>
+                  {creator.locationName.split(',')[0]}
+                </span>
+              )}
+            </div>
+            
+            {creator.activeAssignment?.isActive && (
+              <div className="flex items-center flex-wrap gap-2">
+                <div className="flex items-center gap-1.5 px-1.5 py-0.5 rounded bg-blue-500/10 border border-blue-500/20 w-fit max-w-full">
+                  <span className="text-[9px] font-bold text-blue-400 uppercase tracking-tight shrink-0">At</span>
+                  <span className="text-[10px] font-bold text-blue-400 truncate">
+                    {creator.activeAssignment.venueName}
+                  </span>
+                </div>
+                {creator.activeAssignment.assignmentEnd && (
+                  <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-500/5 border border-blue-500/10">
+                    <span className="text-[9px] font-medium text-blue-400/80 tabular-nums">
+                      {creator.activeAssignment.assignmentStart ? 
+                        `${new Date(creator.activeAssignment.assignmentStart).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })} - ` : 
+                        'Until '}
+                      {new Date(creator.activeAssignment.assignmentEnd).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
+                    </span>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>

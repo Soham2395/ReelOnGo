@@ -38,20 +38,26 @@ function AppContent() {
 
   useEffect(() => {
     setLoading(true);
+
+    // Format current date for API query (DD-MM-YYYY)
+    const now = new Date();
+    const day = String(now.getDate()).padStart(2, '0');
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const year = now.getFullYear();
+    const dateStr = `${day}-${month}-${year}`;
+    const FILTERED_API_URL = `${API_URL}?date=${dateStr}`;
+
+    console.log('Fetching creators with date filter:', FILTERED_API_URL);
+
     Promise.all([
-      fetch(API_URL).then(res => res.json()),
+      fetch(FILTERED_API_URL).then(res => res.json()),
       fetch(EVENT_API_URL).then(res => res.json())
     ])
       .then(([creatorsData, eventData]) => {
-        if (creatorsData.success) {
-          const activeCreators = creatorsData.data.filter(c => c.status === 'ACTIVE');
-          setCreators(activeCreators);
-        }
-        
         if (eventData.success) {
           const fetchedEvents = Array.isArray(eventData.data) ? eventData.data : [eventData.data];
           setEvents(fetchedEvents);
-          // Set initial selected event for proximity filtering and map focus
+          
           if (fetchedEvents.length > 0) {
             const firstEvent = fetchedEvents[0];
             setSelectedEvent(firstEvent);
@@ -63,6 +69,56 @@ function AppContent() {
               });
             }
           }
+        }
+
+        if (creatorsData.success) {
+          const processedCreators = creatorsData.data
+            .filter(c => 
+              c.status === 'ACTIVE' || 
+              c.status === 'ONBOARDED' || 
+              c.status === 'ONBOARDING_STARTED' ||
+              (c.activeAssignments && c.activeAssignments.length > 0)
+            )
+            .map(c => {
+              const nativeCoords = (c.locationCoordinates || c.location)?.coordinates;
+              const mainAssignment = c.activeAssignments?.find(a => a.isActive || a.isCurrentlyAssigned) || c.activeAssignments?.[0];
+              const assignmentCoords = mainAssignment?.currentCoordinates;
+              const venueName = mainAssignment?.venueName || mainAssignment?.eventName || mainAssignment?.address?.split(',')[0] || 'Venue';
+              
+              const normalizedCoordinates = assignmentCoords || nativeCoords;
+
+              const baseCreator = {
+                ...c,
+                locationName: (assignmentCoords && venueName) 
+                  ? venueName 
+                  : (c.locationName || c.address || 'N/A'),
+                normalizedCoordinates: normalizedCoordinates,
+                // Map missing fields from production API to UI expectations
+                creatorCode: c.creatorCode || (c._id ? `ROGC-${c._id.slice(-4).toUpperCase()}` : 'N/A'),
+                gender: c.gender || 'Check Profile',
+                availability: c.availability || 'Check Schedule',
+                iPhoneModel: c.iPhoneModel || 'Verified',
+                contactNumber: c.contactNumber || 'Contact Office',
+                email: c.email || 'N/A',
+                rank: c.rank || 'Bronze',
+                numberOfShoots: c.numberOfShoots || 0
+              };
+
+              if (mainAssignment) {
+                return {
+                  ...baseCreator,
+                  activeAssignment: {
+                    ...mainAssignment,
+                    venueName: venueName,
+                    // Use both flags to be safe
+                    isActive: mainAssignment.isActive || mainAssignment.isCurrentlyAssigned
+                  }
+                };
+              }
+              return baseCreator;
+            });
+          
+          setCreators(processedCreators);
         }
         
         if (!creatorsData.success && !eventData.success) {
@@ -90,12 +146,14 @@ function AppContent() {
     // 2. Proximity Filter (Linked to Selected Event)
     let matchesProximity = true;
     if (filterByProximity && selectedEvent?.venueLocation?.coordinates) {
-      const [eventLon, eventLat] = selectedEvent.venueLocation.coordinates;
-      const creatorCoords = (c.locationCoordinates || c.location)?.coordinates;
-      
-      if (creatorCoords) {
-        const [creLon, creLat] = creatorCoords;
-        const dist = calculateDistance(eventLat, eventLon, creLat, creLon);
+      const coords = c.normalizedCoordinates;
+      if (coords && Array.isArray(coords) && coords.length >= 2) {
+        const dist = calculateDistance(
+          selectedEvent.venueLocation.coordinates[1],
+          selectedEvent.venueLocation.coordinates[0],
+          coords[1],
+          coords[0]
+        );
         matchesProximity = dist <= eventRadius;
       } else {
         matchesProximity = false; 
@@ -107,16 +165,21 @@ function AppContent() {
 
   const handleCreatorClick = useCallback((creator) => {
     setSelectedCreator(creator);
+    setSelectedEvent(null);
     if (isMobile) setSidebarOpen(false);
     
-    const coords = (creator.locationCoordinates || creator.location)?.coordinates;
-    if (coords) {
+    const coords = creator.normalizedCoordinates;
+                   
+    if (coords && Array.isArray(coords) && coords.length >= 2) {
+      console.log('Flying to creator:', creator.creatorName, coords);
       setFlyTo({
-        longitude: coords[0],
-        latitude: coords[1],
-        zoom: 14,
-        id: Date.now(),
+        center: [coords[0], coords[1]],
+        zoom: 15,
+        duration: 1200,
+        id: Date.now()
       });
+    } else {
+      console.warn('No coordinates found for creator:', creator.creatorName);
     }
   }, [isMobile]);
 

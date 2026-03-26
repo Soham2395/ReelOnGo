@@ -1,6 +1,6 @@
 import { useSettings } from '../SettingsContext.jsx';
 import { getInitials } from '../config';
-import { IconMapPin, IconSmartphone, IconHash, IconUser, IconClock, IconCamera, IconPhone, IconMail, IconExternalLink, IconX } from './Icons';
+import { IconMapPin, IconSmartphone, IconHash, IconUser, IconClock, IconCamera, IconPhone, IconMail, IconExternalLink, IconX, IconCalendar } from './Icons';
 
 export default function CreatorPopup({ creator, distance, onClose }) {
   const { settings, getStatusConfig } = useSettings();
@@ -9,13 +9,13 @@ export default function CreatorPopup({ creator, distance, onClose }) {
 
   return (
     <div
-      className="rounded-xl p-4 min-w-[270px] max-w-[310px] shadow-lg"
+      className="rounded-xl p-5 min-w-[300px] max-w-[340px] shadow-lg"
       style={{ background: settings.COLORS.surface, border: `1px solid ${settings.COLORS.border}` }}
     >
       {/* Close */}
       <button
         onClick={onClose}
-        className="absolute top-1 -right-4 w-6 h-6 flex items-center justify-center rounded-full transition-colors hover:bg-white/10 z-10"
+        className="absolute top-1 right-2 w-6 h-6 flex items-center justify-center rounded-full transition-colors hover:bg-white/10 z-10"
         style={{ background: settings.COLORS.surfaceLight || '#1c2029' }}
       >
         <IconX size={12} color={settings.COLORS.textMuted} />
@@ -65,6 +65,21 @@ export default function CreatorPopup({ creator, distance, onClose }) {
         <InfoRow icon={<IconClock size={12} color={settings.COLORS.textMuted} />} label="Availability" value={creator.availability} settings={settings} />
         {creator.numberOfShoots > 0 && (
           <InfoRow icon={<IconCamera size={12} color={settings.COLORS.textMuted} />} label="Shoots" value={`${creator.numberOfShoots}`} settings={settings} />
+        )}
+        
+        {/* Active Assignment Highlight */}
+        {creator.activeAssignment?.isActive && (
+          <div className="mt-3 p-2.5 rounded-lg bg-blue-500/5 border border-blue-500/10 transition-all hover:bg-blue-500/10">
+            <div className="flex items-center gap-2 mb-1.5">
+              <IconCalendar size={12} color="#60a5fa" />
+              <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider">Active Assignment</span>
+            </div>
+            <p className="text-[11px] font-bold text-white mb-1 leading-tight">{creator.activeAssignment.eventName}</p>
+            <div className="flex items-center gap-1.5 opacity-70">
+              <IconMapPin size={10} color={settings.COLORS.textMuted} />
+              <span className="text-[10px] font-medium" style={{ color: settings.COLORS.textSecondary }}>{creator.activeAssignment.venueName}</span>
+            </div>
+          </div>
         )}
       </div>
 

@@ -8,7 +8,8 @@ import Map, {
   Layer
 } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
-import Supercluster from 'supercluster';
+import SuperclusterModule from 'supercluster';
+const SuperclusterClass = SuperclusterModule.default || SuperclusterModule;
 import { 
   MAP_CONFIG, 
   MARKER_CONFIG, 
@@ -46,16 +47,23 @@ export default function MapView({
   const { settings, getStatusConfig } = useSettings();
   const [hoveredCreator, setHoveredCreator] = useState(null);
   const [isMapReady, setIsMapReady] = useState(false);
-  const [zoom, setZoom] = useState(MAP_CONFIG.center.zoom);
+  const [zoom, setZoom] = useState(MAP_CONFIG.zoom || 9);
   const [bounds, setBounds] = useState(null);
-  const [index, setIndex] = useState(null);
+
+  const indexRef = useRef(null);
+  const [clusters, setClusters] = useState([]);
 
   // Convert creators to GeoJSON features for supercluster
   const points = useMemo(() => {
     return creators
       .map(creator => {
-        const coords = (creator.locationCoordinates || creator.location)?.coordinates;
-        if (!coords || !coords[0] || !coords[1]) return null;
+        const coords = creator.normalizedCoordinates;
+        if (!coords || !Array.isArray(coords) || coords.length < 2) return null;
+        
+        const lng = parseFloat(coords[0]);
+        const lat = parseFloat(coords[1]);
+        
+        if (isNaN(lng) || isNaN(lat)) return null;
         
         return {
           type: "Feature",
@@ -67,47 +75,50 @@ export default function MapView({
           },
           geometry: {
             type: "Point",
-            coordinates: coords
+            coordinates: [lng, lat]
           }
         };
       })
       .filter(Boolean);
   }, [creators]);
 
-  // Initialize/Update Supercluster Index
+  // Single atomic effect: build index AND compute clusters in one pass
+  // This eliminates any race condition between index creation and cluster computation
   useEffect(() => {
-    if (points.length > 0) {
-      const sc = new Supercluster({
+    if (!points || points.length === 0 || !bounds || bounds.length !== 4 || bounds.some(b => b == null || isNaN(b))) {
+      indexRef.current = null;
+      setClusters([]);
+      return;
+    }
+    try {
+      const sc = new SuperclusterClass({
         radius: settings.MAP_CONFIG.clusterRadius || 50,
-        maxZoom: 20
+        maxZoom: 16,
+        minZoom: 0
       });
       sc.load(points);
-      setIndex(sc);
-    } else {
-      setIndex(null);
-    }
-  }, [points, settings.MAP_CONFIG.clusterRadius]);
+      indexRef.current = sc;
 
-  // Get clusters from index
-  const clusters = useMemo(() => {
-    if (index && bounds && bounds.length === 4) {
-      try {
-        return index.getClusters(bounds, Math.floor(zoom));
-      } catch (e) {
-        console.error("Clustering error:", e);
-        return [];
+      const safeZoom = Math.max(0, Math.min(16, Math.floor(zoom)));
+      if (sc.trees[safeZoom]) {
+        setClusters(sc.getClusters(bounds, safeZoom));
+      } else {
+        setClusters([]);
       }
+    } catch (e) {
+      console.error("Clustering error:", e);
+      indexRef.current = null;
+      setClusters([]);
     }
-    return [];
-  }, [index, bounds, zoom]);
+  }, [points, bounds, zoom, settings.MAP_CONFIG.clusterRadius]);
 
   // Function to handle cluster click
   const handleClusterClick = useCallback((clusterId, latitude, longitude) => {
-    if (!index) return;
+    if (!indexRef.current) return;
     try {
       const expansionZoom = Math.min(
-        index.getClusterExpansionZoom(clusterId),
-        20
+        indexRef.current.getClusterExpansionZoom(clusterId),
+        16
       );
       
       if (mapRef.current) {
@@ -120,20 +131,33 @@ export default function MapView({
     } catch (e) {
       console.error("Cluster expansion error:", e);
     }
-  }, [index]);
+  }, []);
 
   // Update bounds on move
   const onMove = useCallback((evt) => {
-    setZoom(evt.viewState.zoom);
-    const box = mapRef.current.getMap().getBounds().toArray();
-    setBounds([box[0][0], box[0][1], box[1][0], box[1][1]]);
+    const nextZoom = evt.viewState.zoom || MAP_CONFIG.zoom || 9;
+    setZoom(nextZoom);
+    try {
+      const b = evt.target.getBounds().toArray().flat();
+      if (b && b.length === 4 && !b.some(isNaN)) {
+        setBounds(b);
+      }
+    } catch (e) {
+      console.warn("Bounds update error:", e);
+    }
   }, []);
 
   // Update bounds initially when map is ready
   useEffect(() => {
     if (isMapReady && mapRef.current) {
-      const box = mapRef.current.getMap().getBounds().toArray();
-      setBounds([box[0][0], box[0][1], box[1][0], box[1][1]]);
+      try {
+        const b = mapRef.current.getBounds().toArray().flat();
+        if (b && b.length === 4 && !b.some(isNaN)) {
+          setBounds(b);
+        }
+      } catch (e) {
+        console.warn("Initial bounds error:", e);
+      }
     }
   }, [isMapReady]);
 
@@ -352,6 +376,11 @@ export default function MapView({
                 {(isSelected || isHovered) && (
                   <div className="absolute inset-0 rounded-full blur-md opacity-50" style={{ background: iconColor, width: settings.MARKER_CONFIG.size, height: settings.MARKER_CONFIG.size, margin: 'auto' }} />
                 )}
+
+                {/* Assignment Pulse */}
+                {creator.activeAssignment?.isActive && (
+                  <div className="absolute inset-0 bg-blue-400 rounded-full animate-ping opacity-40" style={{ width: settings.MARKER_CONFIG.size, height: settings.MARKER_CONFIG.size, margin: 'auto' }} />
+                )}
                 
                 {/* Marker Body */}
                 <div 
@@ -381,8 +410,8 @@ export default function MapView({
                       • {calculateDistance(
                         selectedEvent.venueLocation.coordinates[1],
                         selectedEvent.venueLocation.coordinates[0],
-                        (creator.locationCoordinates || creator.location).coordinates[1],
-                        (creator.locationCoordinates || creator.location).coordinates[0]
+                        (creator.activeAssignment?.currentCoordinates ? creator.activeAssignment.currentCoordinates[1] : (creator.locationCoordinates || creator.location).coordinates[1]),
+                        (creator.activeAssignment?.currentCoordinates ? creator.activeAssignment.currentCoordinates[0] : (creator.locationCoordinates || creator.location).coordinates[0])
                       ).toFixed(1)}km
                     </span>
                   )}
@@ -411,14 +440,7 @@ export default function MapView({
               style={{ cursor: 'pointer', zIndex: isSelected ? 10 : 5 }}
             >
               <div className="flex flex-col items-center group">
-                {isSelected && (
-                  <div 
-                    className="px-2 py-1 mb-1 rounded bg-black/80 border border-white/20 whitespace-nowrap overflow-hidden max-w-[120px] shadow-xl animate-in fade-in duration-300"
-                    style={{ borderColor: EVENT_CONFIG.color }}
-                  >
-                    <p className="text-[9px] font-bold text-white truncate">{evt.subeventName}</p>
-                  </div>
-                )}
+                {/* Label removed as per request */}
                 <div className="relative">
                   {isSelected && <div className="absolute inset-0 bg-red-500 rounded-full animate-ping opacity-30" />}
                   <div 
@@ -439,71 +461,26 @@ export default function MapView({
         {/* Popup for Selected Creator */}
         {selectedCreator && (
           <Popup
-            longitude={(selectedCreator.locationCoordinates || selectedCreator.location).coordinates[0]}
-            latitude={(selectedCreator.locationCoordinates || selectedCreator.location).coordinates[1]}
+            longitude={selectedCreator.normalizedCoordinates?.[0] || 78.45}
+            latitude={selectedCreator.normalizedCoordinates?.[1] || 17.45}
             anchor="bottom"
             offset={30}
             onClose={() => onMapClick()}
             closeButton={false}
-            className="creator-popup"
-            maxWidth="320px"
+            className="creator-popup-wrapper"
+            maxWidth="360px"
+            style={{ zIndex: 1000 }}
           >
-            <div className="p-3 bg-[#161921] border border-white/10 rounded-xl overflow-hidden shadow-2xl">
-              <div className="absolute top-0 right-0 w-24 h-24 blur-3xl opacity-20 rounded-full" style={{ background: getStatusConfig(selectedCreator.status).color }} />
-              
-              <div className="relative z-10 space-y-3">
-                <div className="flex items-start justify-between">
-                  <div 
-                    className="w-8 h-8 rounded-lg flex items-center justify-center shadow-lg text-[10px] font-bold text-white transition-transform hover:scale-105" 
-                    style={{ background: getStatusConfig(selectedCreator.status).color }}
-                  >
-                    {getInitials(selectedCreator.creatorName)}
-                  </div>
-                  <div 
-                    className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border" 
-                    style={{ 
-                      color: getStatusConfig(selectedCreator.status).color, 
-                      borderColor: `${getStatusConfig(selectedCreator.status).color}30`, 
-                      background: `${getStatusConfig(selectedCreator.status).color}10` 
-                    }}
-                  >
-                    {getStatusConfig(selectedCreator.status).label}
-                  </div>
-                </div>
-
-                <div className="flex items-start justify-between">
-                  <div className="min-w-0 flex-1">
-                    <h3 className="text-sm font-bold text-white leading-tight truncate">{selectedCreator.creatorName}</h3>
-                    <p className="text-[10px] font-medium mt-1 text-white/50 truncate">
-                      {selectedCreator.locationName || 'Location N/A'}
-                    </p>
-                  </div>
-                  {selectedEvent && (
-                    <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white/5 border border-white/10 shrink-0 ml-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-blue-400 shadow-[0_0_8px_#60a5fa30]" />
-                      <span className="text-[10px] font-bold text-white/90 tabular-nums">
-                        {calculateDistance(
-                          selectedEvent.venueLocation.coordinates[1],
-                          selectedEvent.venueLocation.coordinates[0],
-                          (selectedCreator.locationCoordinates || selectedCreator.location).coordinates[1],
-                          (selectedCreator.locationCoordinates || selectedCreator.location).coordinates[0]
-                        ).toFixed(1)} <span className="text-[8px] font-normal opacity-50 uppercase ml-px">km</span>
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="pt-2 border-t border-white/5 flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <IconMail size={12} color={getStatusConfig(selectedCreator.status).color} className="shrink-0" />
-                    <p className="text-[9px] font-medium text-white/60 truncate">{selectedCreator.email || 'No email'}</p>
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <span className="text-[9px] font-mono text-white/30 uppercase tracking-tighter">{selectedCreator.creatorCode}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <CreatorPopup 
+              creator={selectedCreator} 
+              onClose={() => onMapClick()}
+              distance={selectedEvent?.venueLocation?.coordinates ? calculateDistance(
+                selectedEvent.venueLocation.coordinates[1],
+                selectedEvent.venueLocation.coordinates[0],
+                (selectedCreator.normalizedCoordinates?.[1] || 17.45),
+                (selectedCreator.normalizedCoordinates?.[0] || 78.45)
+              ) : null}
+            />
           </Popup>
         )}
 
@@ -518,8 +495,9 @@ export default function MapView({
             maxWidth="320px"
             className="event-popup"
             offset={30}
+            style={{ zIndex: 1000 }}
           >
-            <div className="p-3 bg-[#161921] border border-white/10 rounded-xl overflow-hidden shadow-2xl">
+            <div className="p-4 bg-[#161921] border border-white/10 rounded-xl overflow-hidden shadow-2xl min-w-[300px]">
               <div className="absolute top-0 right-0 w-24 h-24 blur-3xl opacity-20 rounded-full" style={{ background: EVENT_CONFIG.color }} />
               
               <div className="relative z-10 space-y-3">
@@ -528,28 +506,32 @@ export default function MapView({
                     <IconMapPin size={16} color="white" />
                   </div>
                   <div className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border" style={{ color: EVENT_CONFIG.color, borderColor: `${EVENT_CONFIG.color}30`, background: `${EVENT_CONFIG.color}10` }}>
-                    {selectedEvent.eventStatus}
+                    EVENT
                   </div>
                 </div>
 
                 <div>
                   <h3 className="text-sm font-bold text-white leading-tight">{selectedEvent.subeventName}</h3>
-                  <p className="text-[10px] font-medium mt-1 text-white/50">{selectedEvent.location}</p>
+                  <p className="text-[10px] font-medium mt-1 text-white/50">{selectedEvent.venue?.split(',')[0] || 'Venue'}</p>
                 </div>
 
                 <div className="pt-2 border-t border-white/5 flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <IconCalendar size={12} color={EVENT_CONFIG.color} />
-                    <div>
-                      <p className="text-[10px] font-semibold text-white/90">{selectedEvent.startDate}</p>
+                  {selectedEvent.subeventStart && (
+                    <div className="flex items-center gap-1.5">
+                      <IconCalendar size={12} color={EVENT_CONFIG.color} />
+                      <p className="text-[10px] font-semibold text-white/90">
+                        {new Date(selectedEvent.subeventStart).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                      </p>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <IconClock size={12} color={EVENT_CONFIG.color} />
-                    <div className="text-right">
-                      <p className="text-[10px] font-semibold text-white/90">{selectedEvent.startTime}</p>
+                  )}
+                  {selectedEvent.subeventStart && selectedEvent.subeventEnd && (
+                    <div className="flex items-center gap-1.5">
+                      <IconClock size={12} color={EVENT_CONFIG.color} />
+                      <p className="text-[10px] font-semibold text-white/90">
+                        {new Date(selectedEvent.subeventStart).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}
+                      </p>
                     </div>
-                  </div>
+                  )}
                 </div>
               </div>
             </div>
